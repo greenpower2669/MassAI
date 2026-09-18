@@ -7,9 +7,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.Segmentation
 import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions
 import java.io.Closeable
-import java.io.File
 import java.nio.ByteOrder
-import kotlin.math.PI
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.max
@@ -30,7 +28,10 @@ data class BodyReconstruction(
     val repairFraction: Double,
     val quality: Int,
     val heightM: Double,
-    val halfExtentM: Double
+    val halfExtentM: Double,
+    val angularCoverageDeg: Double,
+    val anglesMeasured: Boolean,
+    val meanBlurScore: Double
 )
 
 class BodyReconstructor : Closeable {
@@ -43,7 +44,9 @@ class BodyReconstructor : Closeable {
         val bottom: Int,
         val rowCenter: FloatArray,
         val pxPerMeter: Double,
-        val maxSpanMeters: Double
+        val maxSpanMeters: Double,
+        val angleRad: Double,
+        val measuredAngle: Boolean
     )
 
     private val options = SelfieSegmenterOptions.Builder()
@@ -53,18 +56,23 @@ class BodyReconstructor : Closeable {
     private val segmenter = Segmentation.getClient(options)
 
     fun reconstruct(
-        frameFiles: List<File>,
+        frames: List<ReconstructionFrame>,
         bodyHeightM: Double,
         progress: (stage: String, current: Int, total: Int) -> Unit = { _, _, _ -> }
     ): BodyReconstruction {
         require(bodyHeightM in 1.0..2.5) { "Taille physique invalide." }
 
         val silhouettes = ArrayList<Silhouette>()
-        frameFiles.forEachIndexed { index, file ->
-            progress("Segmentation silhouette", index + 1, frameFiles.size)
-            val bitmap = decodeScaled(file, 480) ?: return@forEachIndexed
+        frames.forEachIndexed { index, frame ->
+            progress("Segmentation silhouette", index + 1, frames.size)
+            val bitmap = decodeScaled(frame.file.absolutePath, 480) ?: return@forEachIndexed
             try {
-                segment(bitmap, bodyHeightM)?.let(silhouettes::add)
+                segment(
+                    bitmap = bitmap,
+                    bodyHeightM = bodyHeightM,
+                    angleRad = frame.angleRad,
+                    measuredAngle = frame.measuredAngle
+                )?.let(silhouettes::add)
             } finally {
                 bitmap.recycle()
             }
@@ -76,6 +84,22 @@ class BodyReconstructor : Closeable {
             )
         }
 
+        val anglesMeasured = silhouettes.all { it.measuredAngle }
+        val angularCoverageDeg = if (anglesMeasured) {
+            val minAngle = silhouettes.minOf { it.angleRad }
+            val maxAngle = silhouettes.maxOf { it.angleRad }
+            Math.toDegrees(maxAngle - minAngle).coerceAtLeast(0.0)
+        } else {
+            360.0
+        }
+
+        if (anglesMeasured && angularCoverageDeg < 300.0) {
+            throw IllegalStateException(
+                "Couverture angulaire insuffisante : ${angularCoverageDeg.roundToInt()}°. " +
+                    "Effectuez un tour plus complet autour du sujet."
+            )
+        }
+
         progress("Construction du visual hull", 0, 1)
         val halfExtent = silhouettes.maxOf { it.maxSpanMeters }
             .times(0.62)
@@ -84,8 +108,7 @@ class BodyReconstructor : Closeable {
         val nx = 48
         val ny = 96
         val nz = 48
-        val totalVoxels = nx * ny * nz
-        val raw = BooleanArray(totalVoxels)
+        val raw = BooleanArray(nx * ny * nz)
 
         val dx = (2.0 * halfExtent) / nx.toDouble()
         val dy = bodyHeightM / ny.toDouble()
@@ -96,9 +119,8 @@ class BodyReconstructor : Closeable {
         val sinAngles = DoubleArray(silhouettes.size)
 
         silhouettes.indices.forEach { i ->
-            val theta = 2.0 * PI * i.toDouble() / silhouettes.size.toDouble()
-            cosAngles[i] = cos(theta)
-            sinAngles[i] = sin(theta)
+            cosAngles[i] = cos(silhouettes[i].angleRad)
+            sinAngles[i] = sin(silhouettes[i].angleRad)
         }
 
         for (iy in 0 until ny) {
@@ -148,7 +170,7 @@ class BodyReconstructor : Closeable {
 
         if (!raw.any { it }) {
             throw IllegalStateException(
-                "Le visual hull est vide. Vérifiez que la vidéo couvre bien le sujet sur 360°."
+                "Le visual hull est vide. Vérifiez le cadrage et la couverture autour du sujet."
             )
         }
 
@@ -179,19 +201,28 @@ class BodyReconstructor : Closeable {
             rawVolumeM3 = rawVolume,
             repairedVolumeM3 = repairedVolume,
             validViews = silhouettes.size,
-            totalViews = frameFiles.size,
+            totalViews = frames.size,
             repairFraction = repairFraction,
             quality = BodyMath.technicalQuality(
-                silhouettes.size,
-                frameFiles.size,
-                repairFraction
+                validViews = silhouettes.size,
+                totalViews = frames.size,
+                repairFraction = repairFraction,
+                coverageDegrees = angularCoverageDeg
             ),
             heightM = bodyHeightM,
-            halfExtentM = halfExtent
+            halfExtentM = halfExtent,
+            angularCoverageDeg = angularCoverageDeg,
+            anglesMeasured = anglesMeasured,
+            meanBlurScore = frames.map { it.blurScore }.average()
         )
     }
 
-    private fun segment(bitmap: Bitmap, bodyHeightM: Double): Silhouette? {
+    private fun segment(
+        bitmap: Bitmap,
+        bodyHeightM: Double,
+        angleRad: Double,
+        measuredAngle: Boolean
+    ): Silhouette? {
         val image = InputImage.fromBitmap(bitmap, 0)
         val mask = Tasks.await(segmenter.process(image))
         val width = mask.width
@@ -256,8 +287,7 @@ class BodyReconstructor : Closeable {
             }
         }
 
-        // Lisse légèrement la ligne centrale pour limiter les sauts dus aux bras/jambes.
-        for (pass in 0 until 2) {
+        repeat(2) {
             val copy = centers.copyOf()
             for (y in max(1, top) until min(height - 1, bottom + 1)) {
                 centers[y] = (copy[y - 1] + copy[y] + copy[y + 1]) / 3.0f
@@ -275,7 +305,9 @@ class BodyReconstructor : Closeable {
             bottom = bottom,
             rowCenter = centers,
             pxPerMeter = pxPerMeter,
-            maxSpanMeters = maxSpanMeters
+            maxSpanMeters = maxSpanMeters,
+            angleRad = angleRad,
+            measuredAngle = measuredAngle
         )
     }
 
@@ -333,8 +365,6 @@ class BodyReconstructor : Closeable {
                     val i = index(ix, iy, iz, nx, nz)
                     if (!occupancy[i]) continue
                     if (!isSurface(occupancy, ix, iy, iz, nx, ny, nz)) continue
-
-                    // Sous-échantillonnage déterministe pour garder le rendu fluide.
                     if (((ix + iy + iz) and 1) != 0) continue
 
                     points.add(
@@ -403,9 +433,9 @@ class BodyReconstructor : Closeable {
             !occupancy[index(x, y, z + 1, nx, nz)]
     }
 
-    private fun decodeScaled(file: File, maxDimension: Int): Bitmap? {
+    private fun decodeScaled(path: String, maxDimension: Int): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(file.absolutePath, bounds)
+        BitmapFactory.decodeFile(path, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
         var sample = 1
@@ -414,7 +444,7 @@ class BodyReconstructor : Closeable {
         }
 
         return BitmapFactory.decodeFile(
-            file.absolutePath,
+            path,
             BitmapFactory.Options().apply {
                 inSampleSize = sample
                 inPreferredConfig = Bitmap.Config.ARGB_8888
