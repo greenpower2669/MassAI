@@ -2,101 +2,104 @@
 
 POC Android de reconstruction 3D corporelle / humanoïde à partir d'un smartphone.
 
-## État actuel — v0.7.0
+## État actuel — v0.8.0
 
-La v0.7 ajoute un **guide hélicoïdal multi-niveaux** pendant la capture native.
+La v0.8 regroupe quatre chantiers demandés après les premiers tests terrain :
 
-### Guide de scan
+- vrai **mesh triangulé** issu du volume voxel réparé ;
+- sauvegarde/rechargement des modèles ;
+- choix du nombre de passages ;
+- choix de caméra avec tentative d'ultra grand-angle lorsque CameraX l'expose.
 
-Le scan est découpé en trois niveaux :
+## Capture configurable
 
-1. anneau bas ;
-2. anneau milieu ;
-3. anneau haut.
+Avant de filmer, l'utilisateur choisit :
 
-Chaque anneau est divisé en 72 secteurs angulaires.
+- Simple : 1 passage ;
+- Standard : 2 passages ;
+- Précis : 3 passages ;
+- Manuel : 1 à 5 passages.
 
-La ligne acquise reste ouverte pendant le tour. Lorsqu'au moins 66 secteurs sur 72 sont couverts, la boucle est validée et se ferme visuellement. MassAI affiche alors l'anneau supérieur et demande à l'utilisateur de monter le téléphone avant de continuer.
+Le guide hélicoïdal s'adapte automatiquement au nombre choisi.
 
-Les images acquises pendant la transition verticale sont marquées comme transition et ne sont pas utilisées pour la sélection des vues de reconstruction.
+Les transitions verticales restent exclues de la sélection des vues.
 
-### Métadonnées v2
+## Caméra
 
-Chaque échantillon d'orientation contient désormais :
+Trois choix sont proposés :
 
-- temps ;
-- yaw déroulé ;
-- niveau de capture.
+- Auto ;
+- Caméra normale ;
+- Ultra grand-angle.
 
-Le fichier de session enregistre également :
+Pour le mode ultra grand-angle, MassAI inspecte les caméras arrière exposées par CameraX et leurs focales Camera2. Si plusieurs caméras arrière utilisables sont visibles, la plus courte focale distincte est utilisée.
 
-- nombre de niveaux demandés ;
-- nombre de niveaux terminés ;
-- couverture angulaire circulaire par niveau.
+Si le constructeur n'expose pas l'ultra grand-angle comme caméra CameraX sélectionnable, MassAI retombe automatiquement sur la caméra arrière normale au lieu d'échouer.
 
-Les anciens fichiers restent lisibles : un échantillon sans niveau est interprété comme niveau 0.
+La caméra réellement utilisée, son identifiant et sa focale disponible sont enregistrés dans les métadonnées du scan.
 
-### Sélection des vues
+## Mesh 3D
 
-Pour un scan multi-niveaux :
+La v0.8 produit un véritable maillage de triangles à partir des faces externes des voxels.
 
-- 72 images candidates sont extraites au lieu de 48 ;
-- jusqu'à 24 vues sont retenues au lieu de 20 ;
-- les transitions verticales sont ignorées ;
-- les angles sont ramenés sur un tour complet ;
-- la meilleure image de chaque secteur angulaire est sélectionnée, quel que soit le niveau où elle a été capturée.
+Deux rendus sont disponibles :
 
-Important : la v0.7 **ne mesure pas encore la hauteur réelle de la caméra**. Le guide vertical améliore l'acquisition et prépare les métadonnées, mais une exploitation géométrique métrique des différences de hauteur nécessitera une pose caméra 6 DoF / ARCore et une vraie projection perspective.
+- MESH : surface triangulée remplie ;
+- FIL : maillage filaire.
 
-### Pipeline
+Les vues BRUT, POINTS et CORRECTIONS restent disponibles.
 
-Capture / import vidéo
-→ angles et niveaux
-→ sélection des vues
+Le mesh v0.8 est volontairement un mesh voxel surfacique : il n'est pas encore lissé par marching cubes.
+
+## Sauvegarde et export
+
+Après une reconstruction :
+
+- **SAUVER .MASSAI** crée une archive compressée avec la géométrie, les deux meshes et les métriques ;
+- **OUVRIR** recharge ensuite ce modèle sans devoir refaire la vidéo ;
+- **EXPORT OBJ** exporte le mesh réparé vers un format 3D standard.
+
+Le fichier .massai v0.8 sauvegarde le modèle reconstruit, pas la vidéo source complète.
+
+## Pipeline
+
+Capture/import
+→ angles + niveaux + caméra
+→ sélection qualité
 → segmentation
 → visual hull
-→ nettoyage des îlots
-→ réparation voxel
-→ modèle 3D
+→ nettoyage voxel
+→ réparation
+→ mesh triangulé
 → volume
-→ densité si le poids est renseigné.
+→ sauvegarde/export.
 
-## Posture recommandée
-
-- sujet immobile ;
-- bras abaissés et légèrement écartés ;
-- pieds séparés ;
-- corps entier visible ;
-- distance la plus régulière possible ;
-- suivre successivement les trois anneaux.
-
-## Limites
+## Limites importantes
 
 Il manque encore notamment :
 
-- pose caméra 6 DoF et hauteur métrique ;
-- intrinsics / perspective réelle ;
-- squelette anatomique ;
-- régions corporelles ;
-- maillage triangulé ;
-- plan du sol et traitement dédié des pieds ;
+- pose caméra 6 DoF et hauteur métrique réelle ;
+- intrinsics/perspective utilisés directement par la reconstruction ;
+- correction explicite de distorsion ultra grand-angle ;
+- mesh lissé type marching cubes ;
+- squelette anatomique et régions corporelles ;
 - validation scientifique du volume ;
-- modèle graisse / muscle calibré.
+- modèle graisse/muscle calibré.
 
 ## Build
 
 - Android natif Kotlin
 - package : fr.massai.app
-- versionCode : 7
-- versionName : 0.7.0
+- versionCode : 8
+- versionName : 0.8.0
 - minSdk 26
 - targetSdk 35
 - compileSdk 35
 
 La release produit :
 
-- `MassAI-v0.7.0-release.apk`
-- `MassAI-v0.7.0-release.aab`
+- `MassAI-v0.8.0-release.apk`
+- `MassAI-v0.8.0-release.aab`
 
 La signature release utilise encore temporairement la clé debug Android pour les essais du POC.
 
