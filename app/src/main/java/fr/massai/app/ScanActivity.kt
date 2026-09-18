@@ -9,6 +9,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.camera2.CameraCharacteristics
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -18,6 +19,9 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
+import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -40,8 +44,18 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
     companion object {
         const val EXTRA_VIDEO_URI = "fr.massai.app.extra.VIDEO_URI"
         const val EXTRA_METADATA_PATH = "fr.massai.app.extra.METADATA_PATH"
+        const val EXTRA_TARGET_LEVELS = "fr.massai.app.extra.TARGET_LEVELS"
+        const val EXTRA_CAMERA_PREFERENCE = "fr.massai.app.extra.CAMERA_PREFERENCE"
+
         private const val SENSOR_SAMPLE_PERIOD_NS = 50_000_000L
     }
+
+    private data class CameraChoice(
+        val selector: CameraSelector,
+        val requested: CameraPreference,
+        val actual: CameraPreference,
+        val fallbackUsed: Boolean
+    )
 
     private lateinit var previewView: PreviewView
     private lateinit var recordButton: Button
@@ -65,6 +79,13 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
     private var maxYaw = 0.0
     private val orientationSamples = ArrayList<OrientationSample>()
 
+    private var targetLevels = 2
+    private var requestedCameraPreference = CameraPreference.AUTO
+    private var actualCameraPreference = CameraPreference.AUTO
+    private var selectedCameraId: String? = null
+    private var selectedFocalLengthMm: Float? = null
+    private var cameraFallbackUsed = false
+
     private var currentGuideLevel = 0
     private var completedGuideLevels = 0
     private var waitingForLevelAlignment = false
@@ -84,6 +105,12 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_scan)
 
+        targetLevels = intent.getIntExtra(EXTRA_TARGET_LEVELS, 2)
+            .coerceIn(1, SpiralGuideView.MAX_LEVELS)
+        requestedCameraPreference = CameraPreference.fromName(
+            intent.getStringExtra(EXTRA_CAMERA_PREFERENCE)
+        )
+
         previewView = findViewById(R.id.previewView)
         recordButton = findViewById(R.id.recordButton)
         nextLevelButton = findViewById(R.id.nextLevelButton)
@@ -93,10 +120,10 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
 
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-        spiralGuideView.reset(rotationSensor != null)
+        spiralGuideView.configure(targetLevels, rotationSensor != null)
 
         coverageText.text = if (rotationSensor != null) {
-            "Guide hélicoïdal : niveau 1/${SpiralGuideView.LEVELS} prêt"
+            "Guide : niveau 1/$targetLevels prêt"
         } else {
             "Capteur d'orientation indisponible — mode de secours"
         }
@@ -122,7 +149,8 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+        if (
+            ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
         ) {
             startCamera()
@@ -143,6 +171,7 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
         super.onPause()
     }
 
+    @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
     private fun startCamera() {
         statusText.text = "Initialisation de la caméra…"
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
@@ -150,6 +179,9 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
         cameraProviderFuture.addListener({
             try {
                 val cameraProvider = cameraProviderFuture.get()
+                val choice = selectCamera(cameraProvider, requestedCameraPreference)
+                actualCameraPreference = choice.actual
+                cameraFallbackUsed = choice.fallbackUsed
 
                 val preview = Preview.Builder().build().also {
                     it.surfaceProvider = previewView.surfaceProvider
@@ -167,22 +199,170 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
                 videoCapture = VideoCapture.withOutput(recorder)
 
                 cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
+                val camera = cameraProvider.bindToLifecycle(
                     this,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    choice.selector,
                     preview,
                     videoCapture
                 )
 
+                val camera2Info = Camera2CameraInfo.from(camera.cameraInfo)
+                selectedCameraId = camera2Info.cameraId
+                selectedFocalLengthMm = camera2Info
+                    .getCameraCharacteristic(
+                        CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS
+                    )
+                    ?.minOrNull()
+
                 recordButton.isEnabled = true
+
+                val focalText = selectedFocalLengthMm?.let {
+                    " · %.1f mm".format(it)
+                } ?: ""
+
+                val fallbackText = if (cameraFallbackUsed) {
+                    " · ultra indisponible, caméra normale"
+                } else {
+                    ""
+                }
+
                 statusText.text =
-                    "Caméra prête — commencez par l'anneau bas, corps entier visible."
+                    "Caméra prête — ${actualCameraPreference.label}$focalText$fallbackText"
             } catch (e: Exception) {
-                recordButton.isEnabled = false
-                statusText.text =
-                    "Impossible d'ouvrir la caméra : ${e.message ?: "erreur inconnue"}"
+                if (requestedCameraPreference == CameraPreference.ULTRA_WIDE) {
+                    try {
+                        bindDefaultCamera(cameraProviderFuture.get())
+                    } catch (fallbackError: Exception) {
+                        recordButton.isEnabled = false
+                        statusText.text =
+                            "Impossible d'ouvrir la caméra : " +
+                                (fallbackError.message ?: "erreur inconnue")
+                    }
+                } else {
+                    recordButton.isEnabled = false
+                    statusText.text =
+                        "Impossible d'ouvrir la caméra : ${e.message ?: "erreur inconnue"}"
+                }
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
+    private fun bindDefaultCamera(cameraProvider: ProcessCameraProvider) {
+        val preview = Preview.Builder().build().also {
+            it.surfaceProvider = previewView.surfaceProvider
+        }
+
+        val recorder = Recorder.Builder()
+            .setQualitySelector(
+                QualitySelector.fromOrderedList(
+                    listOf(Quality.FHD, Quality.HD, Quality.SD),
+                    FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
+                )
+            )
+            .build()
+
+        videoCapture = VideoCapture.withOutput(recorder)
+        cameraProvider.unbindAll()
+
+        val camera = cameraProvider.bindToLifecycle(
+            this,
+            CameraSelector.DEFAULT_BACK_CAMERA,
+            preview,
+            videoCapture
+        )
+
+        val camera2Info = Camera2CameraInfo.from(camera.cameraInfo)
+        selectedCameraId = camera2Info.cameraId
+        selectedFocalLengthMm = camera2Info
+            .getCameraCharacteristic(
+                CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS
+            )
+            ?.minOrNull()
+
+        actualCameraPreference = CameraPreference.NORMAL
+        cameraFallbackUsed = true
+        recordButton.isEnabled = true
+        statusText.text =
+            "Caméra prête — ultra indisponible, caméra arrière normale."
+    }
+
+    @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
+    private fun selectCamera(
+        provider: ProcessCameraProvider,
+        preference: CameraPreference
+    ): CameraChoice {
+        if (preference != CameraPreference.ULTRA_WIDE) {
+            return CameraChoice(
+                selector = CameraSelector.DEFAULT_BACK_CAMERA,
+                requested = preference,
+                actual = preference,
+                fallbackUsed = false
+            )
+        }
+
+        val backInfos = CameraSelector.DEFAULT_BACK_CAMERA
+            .filter(provider.availableCameraInfos)
+
+        if (backInfos.size < 2) {
+            return CameraChoice(
+                selector = CameraSelector.DEFAULT_BACK_CAMERA,
+                requested = preference,
+                actual = CameraPreference.NORMAL,
+                fallbackUsed = true
+            )
+        }
+
+        val withFocal = backInfos.mapNotNull { info ->
+            val focal = focalLength(info) ?: return@mapNotNull null
+            info to focal
+        }
+
+        if (withFocal.size < 2) {
+            return CameraChoice(
+                selector = CameraSelector.DEFAULT_BACK_CAMERA,
+                requested = preference,
+                actual = CameraPreference.NORMAL,
+                fallbackUsed = true
+            )
+        }
+
+        val ultra = withFocal.minByOrNull { it.second }
+            ?: return CameraChoice(
+                CameraSelector.DEFAULT_BACK_CAMERA,
+                preference,
+                CameraPreference.NORMAL,
+                true
+            )
+
+        val sorted = withFocal.sortedBy { it.second }
+        val distinctEnough =
+            sorted.size >= 2 && sorted[0].second < sorted[1].second * 0.90f
+
+        return if (distinctEnough) {
+            CameraChoice(
+                selector = ultra.first.cameraSelector,
+                requested = preference,
+                actual = CameraPreference.ULTRA_WIDE,
+                fallbackUsed = false
+            )
+        } else {
+            CameraChoice(
+                selector = CameraSelector.DEFAULT_BACK_CAMERA,
+                requested = preference,
+                actual = CameraPreference.NORMAL,
+                fallbackUsed = true
+            )
+        }
+    }
+
+    @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
+    private fun focalLength(info: CameraInfo): Float? {
+        return Camera2CameraInfo.from(info)
+            .getCameraCharacteristic(
+                CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS
+            )
+            ?.minOrNull()
     }
 
     private fun startRecording() {
@@ -205,7 +385,7 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
                         recordingStartNs = SystemClock.elapsedRealtimeNanos()
                         recordButton.text = "ARRÊTER ET RECONSTRUIRE"
                         statusText.text =
-                            "Niveau 1/${SpiralGuideView.LEVELS} — suivez l'anneau autour du sujet."
+                            "Niveau 1/$targetLevels — suivez l'anneau autour du sujet."
                         updateCoverageText()
                     }
 
@@ -227,15 +407,19 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
                                 saved.parentFile ?: filesDir,
                                 "${saved.nameWithoutExtension}.massai.json"
                             )
+
                             ScanMetadata(
                                 samples = orientationSamples.toList(),
                                 sensorAvailable = rotationSensor != null,
                                 targetLevels = if (rotationSensor != null) {
-                                    SpiralGuideView.LEVELS
+                                    targetLevels
                                 } else {
                                     1
                                 },
-                                completedLevels = completedGuideLevels
+                                completedLevels = completedGuideLevels,
+                                cameraPreference = actualCameraPreference.name,
+                                cameraId = selectedCameraId,
+                                focalLengthMm = selectedFocalLengthMm
                             ).writeTo(metadataFile)
 
                             val result = Intent()
@@ -265,11 +449,11 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
             completedGuideLevels == 0 && coverage < 300.0 ->
                 "Finalisation… première boucle incomplète (${coverage.toInt()}°)."
 
-            completedGuideLevels < SpiralGuideView.LEVELS ->
-                "Finalisation… ${completedGuideLevels}/${SpiralGuideView.LEVELS} niveaux terminés."
+            completedGuideLevels < targetLevels ->
+                "Finalisation… $completedGuideLevels/$targetLevels passages terminés."
 
             else ->
-                "Finalisation… guide multi-niveaux complet."
+                "Finalisation… guide multi-passage complet."
         }
 
         recordButton.isEnabled = false
@@ -291,12 +475,12 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
         waitingForLevelAlignment = false
         allGuideLevelsComplete = false
         nextLevelButton.visibility = View.GONE
-        spiralGuideView.reset(rotationSensor != null)
+        spiralGuideView.configure(targetLevels, rotationSensor != null)
     }
 
     private fun advanceGuideLevel() {
         if (recording == null || !waitingForLevelAlignment) return
-        if (currentGuideLevel >= SpiralGuideView.LEVELS - 1) return
+        if (currentGuideLevel >= targetLevels - 1) return
 
         currentGuideLevel++
         waitingForLevelAlignment = false
@@ -304,7 +488,7 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
         spiralGuideView.setActiveLevel(currentGuideLevel)
 
         statusText.text =
-            "Niveau ${currentGuideLevel + 1}/${SpiralGuideView.LEVELS} — refaites une boucle complète."
+            "Niveau ${currentGuideLevel + 1}/$targetLevels — refaites une boucle complète."
         updateCoverageText()
     }
 
@@ -370,19 +554,19 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
 
         completedGuideLevels = max(completedGuideLevels, currentGuideLevel + 1)
 
-        if (currentGuideLevel < SpiralGuideView.LEVELS - 1) {
+        if (currentGuideLevel < targetLevels - 1) {
             waitingForLevelAlignment = true
             val next = currentGuideLevel + 1
             spiralGuideView.showPendingLevel(next)
             nextLevelButton.text = "ALIGNÉ — PASSER AU NIVEAU ${next + 1}"
             nextLevelButton.visibility = View.VISIBLE
             statusText.text =
-                "Boucle ${currentGuideLevel + 1} terminée ✓ — montez le téléphone vers l'anneau supérieur."
+                "Boucle ${currentGuideLevel + 1} terminée ✓ — montez le téléphone."
         } else {
             allGuideLevelsComplete = true
             nextLevelButton.visibility = View.GONE
             statusText.text =
-                "3 niveaux couverts ✓ — vous pouvez arrêter et reconstruire."
+                "$targetLevels passage(s) couvert(s) ✓ — vous pouvez arrêter."
         }
     }
 
@@ -394,7 +578,7 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
 
         if (allGuideLevelsComplete) {
             coverageText.text =
-                "Couverture : ${SpiralGuideView.LEVELS}/${SpiralGuideView.LEVELS} niveaux complets ✓"
+                "Couverture : $targetLevels/$targetLevels passages complets ✓"
             return
         }
 
@@ -403,9 +587,9 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
             .coerceAtMost(360.0)
 
         coverageText.text = if (waitingForLevelAlignment) {
-            "Niveau ${currentGuideLevel + 1} terminé • alignez-vous sur le niveau ${currentGuideLevel + 2}"
+            "Niveau ${currentGuideLevel + 1} terminé • alignez le niveau ${currentGuideLevel + 2}"
         } else {
-            "Niveau ${currentGuideLevel + 1}/${SpiralGuideView.LEVELS} : ${degrees.toInt()}° / ~330°"
+            "Niveau ${currentGuideLevel + 1}/$targetLevels : ${degrees.toInt()}° / ~330°"
         }
     }
 
@@ -413,7 +597,7 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
 
     private fun currentCoverageDegrees(): Double {
         if (rotationSensor == null) return 0.0
-        return (0 until SpiralGuideView.LEVELS)
+        return (0 until targetLevels)
             .maxOf { spiralGuideView.coverageDegrees(it) }
     }
 
