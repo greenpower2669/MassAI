@@ -130,9 +130,9 @@ class BodyReconstructor : Closeable {
 
         val anglesMeasured = silhouettes.all { it.measuredAngle }
         val angularCoverageDeg = if (anglesMeasured) {
-            val minAngle = silhouettes.minOf { it.angleRad }
-            val maxAngle = silhouettes.maxOf { it.angleRad }
-            Math.toDegrees(maxAngle - minAngle).coerceAtLeast(0.0)
+            OrientationMath.circularCoverageDegrees(
+                silhouettes.map { it.angleRad }
+            )
         } else {
             360.0
         }
