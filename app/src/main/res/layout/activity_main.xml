@@ -21,8 +21,44 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="18dp"
-            android:text="Reconstruction corporelle — POC v0.4"
+            android:text="Reconstruction 3D — POC v0.5"
             android:textSize="16sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="MODE DE SEGMENTATION"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/segmentationModeGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/modeHumanRadio"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:checked="true"
+                android:text="Humain" />
+
+            <RadioButton
+                android:id="@+id/modeObjectRadio"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Objet / humanoïde" />
+        </RadioGroup>
+
+        <TextView
+            android:id="@+id/modeHelpText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="Humain : segmentation personne. Objet : segmentation générique du sujet pour tests."
+            android:textSize="14sp" />
 
         <TextView
             android:layout_width="wrap_content"
