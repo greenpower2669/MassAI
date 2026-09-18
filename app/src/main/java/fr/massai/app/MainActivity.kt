@@ -386,12 +386,25 @@ class MainActivity : AppCompatActivity() {
                                         "○ Volume et densité"
                                 }
 
+                                "Nettoyage des artefacts" -> {
+                                    pipelineText.text =
+                                        "✓ Extraction des candidates (${candidates.size})\n" +
+                                        "✓ Sélection qualité (${frames.size} vues)\n" +
+                                        "✓ Segmentation silhouette\n" +
+                                        "✓ Visual hull 3D\n" +
+                                        "◉ Nettoyage des îlots…\n" +
+                                        "○ Réparation voxel\n" +
+                                        "○ Mise à l'échelle\n" +
+                                        "○ Volume et densité"
+                                }
+
                                 "Réparation voxel" -> {
                                     pipelineText.text =
                                         "✓ Extraction des candidates (${candidates.size})\n" +
                                         "✓ Sélection qualité (${frames.size} vues)\n" +
                                         "✓ Segmentation silhouette\n" +
                                         "✓ Visual hull 3D\n" +
+                                        "✓ Nettoyage des îlots\n" +
                                         "◉ Réparation voxel…\n" +
                                         "○ Mise à l'échelle\n" +
                                         "○ Volume et densité"
@@ -436,6 +449,7 @@ class MainActivity : AppCompatActivity() {
                         "✓ Sélection qualité (${frames.size} vues)\n" +
                         "✓ Segmentation silhouette (${result.validViews} valides)\n" +
                         "✓ Visual hull 3D\n" +
+                        "✓ Nettoyage des îlots\n" +
                         "✓ Réparation voxel\n" +
                         "✓ Mise à l'échelle par la hauteur\n" +
                         "✓ Volume" +
@@ -448,14 +462,19 @@ class MainActivity : AppCompatActivity() {
                             "%s\n" +
                             "Qualité technique : %d/100\n" +
                             "Couverture : %.0f° (%s)\n" +
-                            "Corrections : %.2f %% des voxels",
+                            "Corrections : %.2f %% des voxels\n" +
+                            "Artefacts supprimés : %d voxels\n" +
+                            "Composantes : %d → %d",
                         liters,
                         rawLiters,
                         densityLine,
                         result.quality,
                         result.angularCoverageDeg,
                         angleLabel,
-                        repairPct
+                        repairPct,
+                        result.removedIslandVoxels,
+                        result.componentsBeforeCleanup,
+                        result.componentsAfterCleanup
                     )
 
                     val modeName = if (mode == SegmentationMode.OBJECT) {
