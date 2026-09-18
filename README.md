@@ -2,48 +2,52 @@
 
 POC Android de reconstruction corporelle locale à partir d'un smartphone.
 
-## État actuel — v0.4.0
+## État actuel — v0.5.0
 
-La v0.4 conserve la chaîne complète de la v0.3 et renforce l'entrée géométrique :
+La v0.5 ajoute un test A/B de segmentation sans casser le pipeline humain :
 
-1. capture vidéo CameraX ou import vidéo ;
-2. pendant un scan filmé dans MassAI, enregistrement de l'orientation réelle du téléphone via le capteur de rotation ;
-3. suivi en direct de la couverture angulaire pendant le tour autour du sujet ;
-4. extraction de 48 images candidates ;
-5. score de netteté et détection simple de redondance ;
-6. sélection d'environ 20 vues réparties par angle mesuré ;
-7. segmentation corporelle locale avec ML Kit Selfie Segmentation ;
-8. reconstruction 3D par visual hull voxelisé ;
-9. réparation morphologique légère du volume ;
-10. visualisation 3D interactive ;
-11. mise à l'échelle par la taille renseignée ;
-12. volume, densité et score de qualité technique.
+- **Mode Humain** : conserve ML Kit Selfie Segmentation, destiné au corps humain et à la future intégration du squelette anatomique.
+- **Mode Objet / humanoïde** : utilise ML Kit Subject Segmentation pour extraire le sujet générique du fond, sans supposer qu'il s'agit d'un humain.
 
-Pour une vidéo importée ne possédant pas les métadonnées MassAI, la reconstruction conserve un mode de secours avec angles uniformément estimés.
+Les deux modes rejoignent ensuite le même pipeline :
 
-## Contrôle de couverture
+1. capture CameraX ou import vidéo ;
+2. angles téléphone mesurés lorsque le scan est filmé dans MassAI ;
+3. extraction de 48 candidates ;
+4. tri netteté / redondance / couverture ;
+5. sélection d'environ 20 vues ;
+6. segmentation selon le mode choisi ;
+7. visual hull voxelisé ;
+8. réparation légère ;
+9. modèle 3D interactif ;
+10. mise à l'échelle par la hauteur ;
+11. volume ;
+12. densité si un poids est renseigné.
 
-Lors d'un scan filmé depuis MassAI, l'écran caméra affiche la couverture mesurée en degrés.
+## Mode Objet / humanoïde
 
-Une reconstruction avec angles mesurés est refusée sous environ 300° de couverture afin d'éviter de fabriquer un volume artificiellement fermé à partir d'un tour incomplet.
+Ce mode sert principalement à tester et valider la géométrie sur des figurines ou objets de forme connue.
 
-## Important — limites actuelles
+- hauteur acceptée : 5 à 250 cm ;
+- poids facultatif ;
+- la densité n'est calculée que si le poids est renseigné ;
+- le modèle Subject Segmentation est fourni dynamiquement par Google Play Services et peut nécessiter un téléchargement lors du premier usage.
+
+Ce mode permet de comparer directement la reconstruction d'un humanoïde artificiel avec la segmentation humaine précédente.
+
+## Limites
 
 La reconstruction reste un **visual hull POC**, pas encore une photogrammétrie SfM/MVS métrique validée.
 
-Améliorations apportées par la v0.4 :
-- angles issus du téléphone au lieu d'une hypothèse uniforme pour les scans natifs ;
-- sélection des vues par angle ;
-- préférence pour les images les plus nettes ;
-- élimination de vues extrêmement similaires ;
-- couverture 360° intégrée au contrôle qualité.
+La v0.5 ne fournit pas encore :
+- squelette anatomique ;
+- régions corporelles ;
+- composition graisse / muscle ;
+- perspective caméra métrique ;
+- pose caméra 6 DoF ;
+- plan du sol et fermeture spécifique des pieds.
 
-Limites restantes :
-- l'orientation du téléphone fournit une direction relative, pas encore une pose caméra 6 DoF ;
-- la projection est encore approximée comme orthographique ;
-- la distance caméra-sujet n'est pas encore reconstruite ;
-- le plan du sol et la perspective caméra restent à intégrer ;
-- le volume doit encore être validé expérimentalement.
+Ces briques restent séparées afin de ne pas présenter une estimation physiologique comme une mesure.
 
 ## Build
 
@@ -53,13 +57,13 @@ Limites restantes :
 - targetSdk 35
 - compileSdk 35
 - CameraX
-- capteur Android TYPE_ROTATION_VECTOR
 - ML Kit Selfie Segmentation
+- ML Kit Subject Segmentation
 
-La release POC v0.4.0 produit :
-- `MassAI-v0.4.0-release.apk`
-- `MassAI-v0.4.0-release.aab`
+La release v0.5.0 produit :
+- `MassAI-v0.5.0-release.apk`
+- `MassAI-v0.5.0-release.aab`
 
-La signature release utilise temporairement la clé debug Android pour permettre les essais du POC. Elle devra être remplacée avant toute publication Play Store.
+La signature release utilise encore temporairement la clé debug Android pour les essais du POC.
 
-Voir `TODO.md` pour la suite.
+Voir `TODO.md`.
