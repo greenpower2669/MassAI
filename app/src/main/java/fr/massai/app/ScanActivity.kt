@@ -14,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
@@ -38,6 +39,7 @@ class ScanActivity : AppCompatActivity() {
     private var videoCapture: VideoCapture<Recorder>? = null
     private var recording: Recording? = null
     private var outputFile: File? = null
+    private var cancelling = false
 
     private val cameraPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -62,10 +64,15 @@ class ScanActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.cancelScanButton).setOnClickListener {
-            recording?.stop()
-            recording = null
-            setResult(Activity.RESULT_CANCELED)
-            finish()
+            if (recording != null) {
+                cancelling = true
+                statusText.text = "Annulation…"
+                recordButton.isEnabled = false
+                recording?.stop()
+            } else {
+                setResult(Activity.RESULT_CANCELED)
+                finish()
+            }
         }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
@@ -89,8 +96,13 @@ class ScanActivity : AppCompatActivity() {
                     it.surfaceProvider = previewView.surfaceProvider
                 }
 
+                val qualitySelector = QualitySelector.fromOrderedList(
+                    listOf(Quality.FHD, Quality.HD, Quality.SD),
+                    FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
+                )
+
                 val recorder = Recorder.Builder()
-                    .setQualitySelector(QualitySelector.from(Quality.HD))
+                    .setQualitySelector(qualitySelector)
                     .build()
 
                 videoCapture = VideoCapture.withOutput(recorder)
@@ -104,7 +116,7 @@ class ScanActivity : AppCompatActivity() {
                 )
 
                 recordButton.isEnabled = true
-                statusText.text = "Caméra prête — gardez le corps entier dans l'image."
+                statusText.text = "Caméra prête — corps entier visible, faites un tour complet."
             } catch (e: Exception) {
                 recordButton.isEnabled = false
                 statusText.text = "Impossible d'ouvrir la caméra : ${e.message ?: "erreur inconnue"}"
@@ -115,6 +127,7 @@ class ScanActivity : AppCompatActivity() {
     private fun startRecording() {
         val capture = videoCapture ?: return
 
+        cancelling = false
         val baseDir = getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: filesDir
         val file = File(baseDir, "MassAI_scan_${System.currentTimeMillis()}.mp4")
         outputFile = file
@@ -126,13 +139,20 @@ class ScanActivity : AppCompatActivity() {
             .start(ContextCompat.getMainExecutor(this)) { event ->
                 when (event) {
                     is VideoRecordEvent.Start -> {
-                        recordButton.text = "ARRÊTER ET UTILISER LA VIDÉO"
-                        statusText.text = "Enregistrement en cours… tournez lentement autour du sujet."
+                        recordButton.text = "ARRÊTER ET RECONSTRUIRE"
+                        statusText.text = "Enregistrement… tournez lentement sur 360° autour du sujet."
                     }
 
                     is VideoRecordEvent.Finalize -> {
                         recording = null
                         recordButton.text = "DÉMARRER L'ENREGISTREMENT"
+
+                        if (cancelling) {
+                            outputFile?.delete()
+                            setResult(Activity.RESULT_CANCELED)
+                            finish()
+                            return@start
+                        }
 
                         if (!event.hasError()) {
                             val saved = outputFile ?: return@start
@@ -143,8 +163,9 @@ class ScanActivity : AppCompatActivity() {
                             setResult(Activity.RESULT_OK, result)
                             finish()
                         } else {
-                            statusText.text = "Échec de l'enregistrement (code ${event.error})."
+                            statusText.text = "Échec de l'enregistrement (code ${event.error}). Vous pouvez réessayer."
                             outputFile?.delete()
+                            recordButton.isEnabled = true
                         }
                     }
                 }
