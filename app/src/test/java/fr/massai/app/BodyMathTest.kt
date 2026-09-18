@@ -21,4 +21,11 @@ class BodyMathTest {
         val repaired = BodyMath.technicalQuality(20, 20, 0.08)
         assert(clean > repaired)
     }
+
+    @Test
+    fun technicalQualityDropsWithIncompleteCoverage() {
+        val complete = BodyMath.technicalQuality(20, 20, 0.0, 360.0)
+        val incomplete = BodyMath.technicalQuality(20, 20, 0.0, 180.0)
+        assert(complete > incomplete)
+    }
 }
