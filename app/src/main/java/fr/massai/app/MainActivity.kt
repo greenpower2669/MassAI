@@ -179,8 +179,14 @@ class MainActivity : AppCompatActivity() {
 
         val metadata = selectedMetadataFile?.let { ScanMetadata.readFrom(it) }
         val angleInfo = when {
-            metadata?.sensorAvailable == true && metadata.samples.size >= 8 ->
-                "Angles téléphone : ${metadata.coverageDegrees.roundToInt()}° mesurés"
+            metadata?.sensorAvailable == true && metadata.samples.size >= 8 -> {
+                val levelInfo = if (metadata.targetLevels > 1) {
+                    " • guide ${metadata.completedLevels}/${metadata.targetLevels} niveaux"
+                } else {
+                    ""
+                }
+                "Angles téléphone : ${metadata.coverageDegrees.roundToInt()}° mesurés$levelInfo"
+            }
             sourceLabel.startsWith("Vidéo importée") ->
                 "Angles : estimation uniforme (vidéo importée)"
             else ->
@@ -290,7 +296,12 @@ class MainActivity : AppCompatActivity() {
                     )
                 }
 
-                val candidates = extractCandidates(uri, 48)
+                val multiLevelScan =
+                    metadata?.sensorAvailable == true && metadata.targetLevels > 1
+                val candidateTarget = if (multiLevelScan) 72 else 48
+                val wantedViews = if (multiLevelScan) 24 else 20
+
+                val candidates = extractCandidates(uri, candidateTarget)
                 if (candidates.size < 12) {
                     throw IllegalStateException(
                         "Seulement ${candidates.size} images candidates ont pu être extraites."
@@ -311,7 +322,7 @@ class MainActivity : AppCompatActivity() {
 
                 var frames = FrameSelector.select(
                     candidates = candidates,
-                    wanted = 20,
+                    wanted = wantedViews,
                     metadata = metadata
                 )
 
@@ -464,7 +475,8 @@ class MainActivity : AppCompatActivity() {
                             "Couverture : %.0f° (%s)\n" +
                             "Corrections : %.2f %% des voxels\n" +
                             "Artefacts supprimés : %d voxels\n" +
-                            "Composantes : %d → %d",
+                            "Composantes : %d → %d\n" +
+                            "Niveaux de capture exploités : %d",
                         liters,
                         rawLiters,
                         densityLine,
@@ -474,7 +486,8 @@ class MainActivity : AppCompatActivity() {
                         repairPct,
                         result.removedIslandVoxels,
                         result.componentsBeforeCleanup,
-                        result.componentsAfterCleanup
+                        result.componentsAfterCleanup,
+                        frames.map { it.scanLevel }.distinct().size
                     )
 
                     val modeName = if (mode == SegmentationMode.OBJECT) {
