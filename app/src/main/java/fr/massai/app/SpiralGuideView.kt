@@ -16,12 +16,13 @@ class SpiralGuideView @JvmOverloads constructor(
 ) : View(context, attrs) {
 
     companion object {
-        const val LEVELS = 3
+        const val MAX_LEVELS = 5
         const val BINS = 72
         const val REQUIRED_BINS = 66
     }
 
-    private val covered = Array(LEVELS) { BooleanArray(BINS) }
+    private val covered = Array(MAX_LEVELS) { BooleanArray(BINS) }
+    private var targetLevels = 3
     private var activeLevel = 0
     private var pendingLevel: Int? = null
     private var currentYawRad = 0.0
@@ -71,9 +72,16 @@ class SpiralGuideView @JvmOverloads constructor(
         textSize = 32f
     }
 
+    fun configure(levels: Int, sensorAvailable: Boolean) {
+        targetLevels = levels.coerceIn(1, MAX_LEVELS)
+        reset(sensorAvailable)
+    }
+
+    fun levelCount(): Int = targetLevels
+
     fun reset(sensorAvailable: Boolean) {
         this.sensorAvailable = sensorAvailable
-        for (level in 0 until LEVELS) covered[level].fill(false)
+        for (level in 0 until MAX_LEVELS) covered[level].fill(false)
         activeLevel = 0
         pendingLevel = null
         currentYawRad = 0.0
@@ -81,7 +89,7 @@ class SpiralGuideView @JvmOverloads constructor(
     }
 
     fun markAngle(level: Int, yawRad: Double) {
-        if (level !in 0 until LEVELS) return
+        if (level !in 0 until targetLevels) return
         currentYawRad = yawRad
         covered[level][binFor(yawRad)] = true
         activeLevel = level
@@ -90,7 +98,7 @@ class SpiralGuideView @JvmOverloads constructor(
     }
 
     fun showPendingLevel(level: Int) {
-        pendingLevel = level.takeIf { it in 0 until LEVELS }
+        pendingLevel = level.takeIf { it in 0 until targetLevels }
         invalidate()
     }
 
@@ -100,14 +108,14 @@ class SpiralGuideView @JvmOverloads constructor(
     }
 
     fun setActiveLevel(level: Int) {
-        if (level !in 0 until LEVELS) return
+        if (level !in 0 until targetLevels) return
         activeLevel = level
         pendingLevel = null
         invalidate()
     }
 
     fun coveredBinCount(level: Int): Int {
-        if (level !in 0 until LEVELS) return 0
+        if (level !in 0 until targetLevels) return 0
         return covered[level].count { it }
     }
 
@@ -115,14 +123,15 @@ class SpiralGuideView @JvmOverloads constructor(
         return coveredBinCount(level) * (360.0 / BINS.toDouble())
     }
 
-    fun isLevelComplete(level: Int): Boolean = coveredBinCount(level) >= REQUIRED_BINS
+    fun isLevelComplete(level: Int): Boolean =
+        level in 0 until targetLevels && coveredBinCount(level) >= REQUIRED_BINS
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
         if (!sensorAvailable) {
             canvas.drawText(
-                "Guide 3D indisponible sans capteur d’orientation",
+                "Guide angulaire indisponible sans capteur",
                 width * 0.5f,
                 height * 0.5f,
                 labelPaint
@@ -132,15 +141,27 @@ class SpiralGuideView @JvmOverloads constructor(
 
         val cx = width * 0.5f
         val ringWidth = width * 0.68f
-        val ringHeight = height * 0.12f
-        val topY = height * 0.28f
-        val spacing = height * 0.17f
+        val ringHeight = (height * 0.10f).coerceAtLeast(34f)
+        val bottomY = height * 0.70f
+        val topY = height * 0.27f
+        val spacing = if (targetLevels <= 1) {
+            0f
+        } else {
+            (bottomY - topY) / (targetLevels - 1).toFloat()
+        }
+
+        fun centerY(level: Int): Float =
+            if (targetLevels <= 1) {
+                height * 0.50f
+            } else {
+                bottomY - level * spacing
+            }
 
         var previousCompletedPointX: Float? = null
         var previousCompletedPointY: Float? = null
 
-        for (level in 0 until LEVELS) {
-            val cy = topY + (LEVELS - 1 - level) * spacing
+        for (level in 0 until targetLevels) {
+            val cy = centerY(level)
             val oval = RectF(
                 cx - ringWidth * 0.5f,
                 cy - ringHeight * 0.5f,
@@ -161,7 +182,6 @@ class SpiralGuideView @JvmOverloads constructor(
                 canvas.drawOval(oval, coveredPaint)
             } else if (level == activeLevel) {
                 val currentBin = binFor(currentYawRad)
-                val step = 360f / BINS.toFloat()
                 canvas.drawArc(
                     oval,
                     currentBin * step - 90f,
@@ -194,14 +214,14 @@ class SpiralGuideView @JvmOverloads constructor(
         pendingLevel?.let { next ->
             val previous = (next - 1).coerceAtLeast(0)
             if (isLevelComplete(previous)) {
-                val fromCy = topY + (LEVELS - 1 - previous) * spacing
-                val toCy = topY + (LEVELS - 1 - next) * spacing
+                val fromCy = centerY(previous)
+                val toCy = centerY(next)
                 val x = cx + ringWidth * 0.5f
                 canvas.drawLine(x, fromCy, x, toCy, connectorPaint)
             }
         }
 
-        val currentCy = topY + (LEVELS - 1 - activeLevel) * spacing
+        val currentCy = centerY(activeLevel)
         val displayAngle = currentYawRad - PI / 2.0
         val dotX = (cx + cos(displayAngle) * ringWidth * 0.5).toFloat()
         val dotY = (currentCy + sin(displayAngle) * ringHeight * 0.5).toFloat()
@@ -209,7 +229,7 @@ class SpiralGuideView @JvmOverloads constructor(
 
         val label = pendingLevel?.let {
             "Montez vers le niveau ${it + 1}"
-        } ?: "Niveau ${activeLevel + 1}/$LEVELS"
+        } ?: "Niveau ${activeLevel + 1}/$targetLevels"
         canvas.drawText(label, cx, height * 0.92f, labelPaint)
     }
 
