@@ -23,6 +23,8 @@ data class BodyReconstruction(
     val rawSurface: List<Point3>,
     val repairedSurface: List<Point3>,
     val corrections: List<Point3>,
+    val rawMesh: Mesh3,
+    val repairedMesh: Mesh3,
     val rawVolumeM3: Double,
     val repairedVolumeM3: Double,
     val validViews: Int,
@@ -256,10 +258,30 @@ class BodyReconstructor : Closeable {
         val corrections =
             correctionPoints(raw, finalRepaired, nx, ny, nz, halfExtent, bodyHeightM)
 
+        progress("Génération du mesh", 0, 1)
+        val rawMesh = VoxelMeshBuilder.build(
+            occupancy = raw,
+            nx = nx,
+            ny = ny,
+            nz = nz,
+            halfExtentM = halfExtent,
+            heightM = bodyHeightM
+        )
+        val repairedMesh = VoxelMeshBuilder.build(
+            occupancy = finalRepaired,
+            nx = nx,
+            ny = ny,
+            nz = nz,
+            halfExtentM = halfExtent,
+            heightM = bodyHeightM
+        )
+
         return BodyReconstruction(
             rawSurface = rawSurface,
             repairedSurface = repairedSurface,
             corrections = corrections,
+            rawMesh = rawMesh,
+            repairedMesh = repairedMesh,
             rawVolumeM3 = rawVolume,
             repairedVolumeM3 = repairedVolume,
             validViews = silhouettes.size,
