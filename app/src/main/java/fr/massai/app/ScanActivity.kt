@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.os.SystemClock
+import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,8 +45,10 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
 
     private lateinit var previewView: PreviewView
     private lateinit var recordButton: Button
+    private lateinit var nextLevelButton: Button
     private lateinit var statusText: TextView
     private lateinit var coverageText: TextView
+    private lateinit var spiralGuideView: SpiralGuideView
 
     private var videoCapture: VideoCapture<Recorder>? = null
     private var recording: Recording? = null
@@ -61,6 +64,11 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
     private var minYaw = 0.0
     private var maxYaw = 0.0
     private val orientationSamples = ArrayList<OrientationSample>()
+
+    private var currentGuideLevel = 0
+    private var completedGuideLevels = 0
+    private var waitingForLevelAlignment = false
+    private var allGuideLevelsComplete = false
 
     private val cameraPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -78,13 +86,17 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
 
         previewView = findViewById(R.id.previewView)
         recordButton = findViewById(R.id.recordButton)
+        nextLevelButton = findViewById(R.id.nextLevelButton)
         statusText = findViewById(R.id.recordStatusText)
         coverageText = findViewById(R.id.coverageText)
+        spiralGuideView = findViewById(R.id.spiralGuideView)
 
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        spiralGuideView.reset(rotationSensor != null)
+
         coverageText.text = if (rotationSensor != null) {
-            "Couverture angulaire : prête"
+            "Guide hélicoïdal : niveau 1/${SpiralGuideView.LEVELS} prêt"
         } else {
             "Capteur d'orientation indisponible — mode de secours"
         }
@@ -93,11 +105,16 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
             if (recording == null) startRecording() else stopRecording()
         }
 
+        nextLevelButton.setOnClickListener {
+            advanceGuideLevel()
+        }
+
         findViewById<Button>(R.id.cancelScanButton).setOnClickListener {
             if (recording != null) {
                 cancelling = true
                 statusText.text = "Annulation…"
                 recordButton.isEnabled = false
+                nextLevelButton.visibility = View.GONE
                 recording?.stop()
             } else {
                 setResult(Activity.RESULT_CANCELED)
@@ -158,10 +175,12 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
                 )
 
                 recordButton.isEnabled = true
-                statusText.text = "Caméra prête — corps entier visible, faites un tour complet."
+                statusText.text =
+                    "Caméra prête — commencez par l'anneau bas, corps entier visible."
             } catch (e: Exception) {
                 recordButton.isEnabled = false
-                statusText.text = "Impossible d'ouvrir la caméra : ${e.message ?: "erreur inconnue"}"
+                statusText.text =
+                    "Impossible d'ouvrir la caméra : ${e.message ?: "erreur inconnue"}"
             }
         }, ContextCompat.getMainExecutor(this))
     }
@@ -185,17 +204,15 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
                     is VideoRecordEvent.Start -> {
                         recordingStartNs = SystemClock.elapsedRealtimeNanos()
                         recordButton.text = "ARRÊTER ET RECONSTRUIRE"
-                        statusText.text = "Enregistrement… tournez lentement autour du sujet."
-                        coverageText.text = if (rotationSensor != null) {
-                            "Couverture angulaire : 0° / 360°"
-                        } else {
-                            "Angles non mesurés — estimation par la vidéo"
-                        }
+                        statusText.text =
+                            "Niveau 1/${SpiralGuideView.LEVELS} — suivez l'anneau autour du sujet."
+                        updateCoverageText()
                     }
 
                     is VideoRecordEvent.Finalize -> {
                         recording = null
                         recordButton.text = "DÉMARRER L'ENREGISTREMENT"
+                        nextLevelButton.visibility = View.GONE
                         val saved = outputFile
 
                         if (cancelling) {
@@ -212,7 +229,13 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
                             )
                             ScanMetadata(
                                 samples = orientationSamples.toList(),
-                                sensorAvailable = rotationSensor != null
+                                sensorAvailable = rotationSensor != null,
+                                targetLevels = if (rotationSensor != null) {
+                                    SpiralGuideView.LEVELS
+                                } else {
+                                    1
+                                },
+                                completedLevels = completedGuideLevels
                             ).writeTo(metadataFile)
 
                             val result = Intent()
@@ -235,12 +258,22 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
 
     private fun stopRecording() {
         val coverage = currentCoverageDegrees()
-        statusText.text = if (rotationSensor != null && coverage < 300.0) {
-            "Finalisation… couverture ${coverage.toInt()}°, le contrôle qualité décidera."
-        } else {
-            "Finalisation de la vidéo…"
+        statusText.text = when {
+            rotationSensor == null ->
+                "Finalisation de la vidéo…"
+
+            completedGuideLevels == 0 && coverage < 300.0 ->
+                "Finalisation… première boucle incomplète (${coverage.toInt()}°)."
+
+            completedGuideLevels < SpiralGuideView.LEVELS ->
+                "Finalisation… ${completedGuideLevels}/${SpiralGuideView.LEVELS} niveaux terminés."
+
+            else ->
+                "Finalisation… guide multi-niveaux complet."
         }
+
         recordButton.isEnabled = false
+        nextLevelButton.visibility = View.GONE
         recording?.stop()
     }
 
@@ -252,6 +285,27 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
         minYaw = 0.0
         maxYaw = 0.0
         orientationSamples.clear()
+
+        currentGuideLevel = 0
+        completedGuideLevels = 0
+        waitingForLevelAlignment = false
+        allGuideLevelsComplete = false
+        nextLevelButton.visibility = View.GONE
+        spiralGuideView.reset(rotationSensor != null)
+    }
+
+    private fun advanceGuideLevel() {
+        if (recording == null || !waitingForLevelAlignment) return
+        if (currentGuideLevel >= SpiralGuideView.LEVELS - 1) return
+
+        currentGuideLevel++
+        waitingForLevelAlignment = false
+        nextLevelButton.visibility = View.GONE
+        spiralGuideView.setActiveLevel(currentGuideLevel)
+
+        statusText.text =
+            "Niveau ${currentGuideLevel + 1}/${SpiralGuideView.LEVELS} — refaites une boucle complète."
+        updateCoverageText()
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -278,23 +332,89 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
             maxYaw = max(maxYaw, unwrappedYaw)
         }
 
-        if (lastSensorSampleNs == 0L ||
+        if (
+            lastSensorSampleNs == 0L ||
             event.timestamp - lastSensorSampleNs >= SENSOR_SAMPLE_PERIOD_NS
         ) {
             val timeMs = ((event.timestamp - recordingStartNs) / 1_000_000L)
                 .coerceAtLeast(0L)
-            orientationSamples += OrientationSample(timeMs, unwrappedYaw)
+
+            val sampleLevel = if (waitingForLevelAlignment) {
+                -1
+            } else {
+                currentGuideLevel
+            }
+
+            orientationSamples += OrientationSample(
+                timeMs = timeMs,
+                yawRad = unwrappedYaw,
+                level = sampleLevel
+            )
             lastSensorSampleNs = event.timestamp
 
-            val coverage = currentCoverageDegrees().coerceAtMost(360.0)
-            coverageText.text = "Couverture angulaire : ${coverage.toInt()}° / 360°"
+            if (waitingForLevelAlignment) {
+                spiralGuideView.updateYaw(unwrappedYaw)
+            } else if (!allGuideLevelsComplete) {
+                spiralGuideView.markAngle(currentGuideLevel, unwrappedYaw)
+                handleGuideProgress()
+            } else {
+                spiralGuideView.updateYaw(unwrappedYaw)
+            }
+
+            updateCoverageText()
+        }
+    }
+
+    private fun handleGuideProgress() {
+        if (!spiralGuideView.isLevelComplete(currentGuideLevel)) return
+
+        completedGuideLevels = max(completedGuideLevels, currentGuideLevel + 1)
+
+        if (currentGuideLevel < SpiralGuideView.LEVELS - 1) {
+            waitingForLevelAlignment = true
+            val next = currentGuideLevel + 1
+            spiralGuideView.showPendingLevel(next)
+            nextLevelButton.text = "ALIGNÉ — PASSER AU NIVEAU ${next + 1}"
+            nextLevelButton.visibility = View.VISIBLE
+            statusText.text =
+                "Boucle ${currentGuideLevel + 1} terminée ✓ — montez le téléphone vers l'anneau supérieur."
+        } else {
+            allGuideLevelsComplete = true
+            nextLevelButton.visibility = View.GONE
+            statusText.text =
+                "3 niveaux couverts ✓ — vous pouvez arrêter et reconstruire."
+        }
+    }
+
+    private fun updateCoverageText() {
+        if (rotationSensor == null) {
+            coverageText.text = "Angles non mesurés — estimation par la vidéo"
+            return
+        }
+
+        if (allGuideLevelsComplete) {
+            coverageText.text =
+                "Couverture : ${SpiralGuideView.LEVELS}/${SpiralGuideView.LEVELS} niveaux complets ✓"
+            return
+        }
+
+        val degrees = spiralGuideView
+            .coverageDegrees(currentGuideLevel)
+            .coerceAtMost(360.0)
+
+        coverageText.text = if (waitingForLevelAlignment) {
+            "Niveau ${currentGuideLevel + 1} terminé • alignez-vous sur le niveau ${currentGuideLevel + 2}"
+        } else {
+            "Niveau ${currentGuideLevel + 1}/${SpiralGuideView.LEVELS} : ${degrees.toInt()}° / ~330°"
         }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
     private fun currentCoverageDegrees(): Double {
-        return Math.toDegrees(maxYaw - minYaw).coerceAtLeast(0.0)
+        if (rotationSensor == null) return 0.0
+        return (0 until SpiralGuideView.LEVELS)
+            .maxOf { spiralGuideView.coverageDegrees(it) }
     }
 
     override fun onDestroy() {
