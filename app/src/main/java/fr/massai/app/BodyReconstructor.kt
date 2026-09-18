@@ -47,6 +47,7 @@ class BodyReconstructor : Closeable {
         val rowCenter: FloatArray,
         val pxPerMeter: Double,
         val maxSpanMeters: Double,
+        val threshold: Float,
         val angleRad: Double,
         val measuredAngle: Boolean
     )
@@ -189,7 +190,7 @@ class BodyReconstructor : Closeable {
 
                             if (col in 0 until silhouette.width) {
                                 val p = silhouette.probability[row * silhouette.width + col]
-                                if (p >= FOREGROUND_THRESHOLD) support++
+                                if (p >= silhouette.threshold) support++
                             }
                         }
 
@@ -396,6 +397,7 @@ class BodyReconstructor : Closeable {
             rowCenter = centers,
             pxPerMeter = pxPerMeter,
             maxSpanMeters = maxSpanMeters,
+            threshold = threshold,
             angleRad = angleRad,
             measuredAngle = measuredAngle
         )
@@ -553,7 +555,4 @@ class BodyReconstructor : Closeable {
         objectSegmenter.close()
     }
 
-    companion object {
-        private const val FOREGROUND_THRESHOLD = 0.60f
-    }
 }
