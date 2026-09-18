@@ -94,6 +94,11 @@ class SpiralGuideView @JvmOverloads constructor(
         invalidate()
     }
 
+    fun updateYaw(yawRad: Double) {
+        currentYawRad = yawRad
+        invalidate()
+    }
+
     fun setActiveLevel(level: Int) {
         if (level !in 0 until LEVELS) return
         activeLevel = level
