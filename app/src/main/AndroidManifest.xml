@@ -1,9 +1,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.CAMERA" />
-    <application android:theme="@style/Theme.MassAI" android:label="MassAI">
-        <activity android:name=".MainActivity" android:screenOrientation="portrait" android:exported="true">
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
+    <application
+        android:theme="@style/Theme.MassAI"
+        android:label="MassAI">
+
+        <activity
+            android:name=".ScanActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+
+        <activity
+            android:name=".MainActivity"
+            android:screenOrientation="portrait"
+            android:exported="true">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
     </application>
