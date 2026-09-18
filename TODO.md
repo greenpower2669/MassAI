@@ -1,47 +1,48 @@
-# MassAI — TODO après v0.4.0
+# MassAI — TODO après v0.5.0
 
-La v0.4.0 fournit :
-vidéo -> angles téléphone -> sélection netteté/angles -> silhouettes -> visual hull -> réparation -> modèle 3D -> volume -> densité.
+La v0.5 permet désormais de comparer :
+- Humain : segmentation personne ;
+- Objet / humanoïde : segmentation générique du sujet.
 
-## Priorité haute
+## Prochain jalon prioritaire
 
-- Ajouter la position caméra 6 DoF avec ARCore lorsque disponible.
-- Exploiter les intrinsics caméra / focale pour remplacer la projection orthographique par une vraie projection perspective.
-- Ajouter un contrôle de distance caméra-sujet et de corps entier visible pendant la capture.
-- Ajouter une détection de mouvement du sujet indépendamment du mouvement du téléphone.
-- Ajouter le plan du sol et le repérage tête-sol.
-- Valider la répétabilité sur plusieurs scans consécutifs d'une même personne.
-- Exporter session + modèle + métadonnées en GLB/JSON/CSV.
+- Ajouter le squelette humain 33 points sur le mode Humain.
+- Utiliser le squelette comme contrôle anatomique et pour découper le volume :
+  tête / tronc / bassin / bras / avant-bras / cuisses / jambes / pieds.
+- Ajouter l'affichage 3D Surface / Squelette / Régions / Corrections.
+- Mesurer les volumes régionaux et sections principales.
+- Ne pas calculer graisse/muscle avant validation et calibration sur données de référence.
 
-## Qualité image / acquisition
+## Acquisition / géométrie
 
-- Améliorer le score de flou avec une calibration par résolution et appareil.
-- Ajouter une vraie mesure de parallaxe/redondance visuelle.
-- Ajouter une aide vocale : trop vite, trop lent, revenez en arrière, tour complet atteint.
-- Bloquer les zones angulaires insuffisamment échantillonnées.
-- Ajouter une vérification des bras, jambes et pieds séparés.
+- Ajouter ARCore / pose caméra 6 DoF lorsque disponible.
+- Exploiter les intrinsics et la focale pour la perspective réelle.
+- Mesurer la distance caméra-sujet.
+- Détecter le mouvement du sujet.
+- Contrôler corps entier visible, bras/jambes séparés et couverture angulaire.
+- Ajouter plan du sol, tête-sol et fermeture indépendante des deux pieds.
+- Trianguler la surface via marching cubes ou équivalent.
+- Exporter GLB + JSON/CSV.
 
-## Géométrie
+## Mode Objet / validation
 
-- Ajouter une surface triangulée via marching cubes ou équivalent.
-- Intégrer les poses 6 DoF aux projections de silhouettes.
-- Conserver reconstruction brute et corrigée.
-- Quantifier les corrections par région corporelle.
-- Ajouter un score de confiance spatial.
-- Vérifier la sensibilité du volume à la résolution voxel.
-- Traiter explicitement le sol et fermer séparément les deux semelles.
+- Comparer Humain vs Objet sur la même figurine.
+- Tester plusieurs fonds et niveaux de contraste.
+- Tester des objets de volume connu.
+- Répéter chaque scan pour estimer biais et variance.
+- Vérifier l'effet de la couleur du sujet et du fond sur le masque.
+- Ajouter éventuellement une visualisation 2D du masque sélectionné pour diagnostic.
 
-## Validation scientifique
+## Validation scientifique humaine
 
-- Tester d'abord sur objets de volume connu.
-- Répéter chaque objet plusieurs fois pour estimer biais et variance.
-- Tester ensuite sur humain avec une méthode de volume de référence si disponible.
-- Ne pas inférer graisse/muscle/os avant validation de la répétabilité géométrique.
-- Rechercher un dataset scientifique 3D + DXA pour la future partie composition corporelle.
+- Répétabilité scan-sur-scan d'une même personne.
+- Comparaison du volume à une méthode de référence.
+- Recherche dataset scan 3D + DXA.
+- Composition graisse / masse maigre seulement après calibration et validation.
 
 ## Android / distribution
 
-- Remplacer la signature debug du POC par une vraie clé de publication.
+- Remplacer la signature debug par une vraie clé de publication.
 - Ajouter tests instrumentés caméra/capteurs/permissions.
 - Ajouter synthèse vocale et retours sonores.
-- Tester plusieurs marques, focales, stabilisations et résolutions Android.
+- Tester plusieurs appareils Android.
