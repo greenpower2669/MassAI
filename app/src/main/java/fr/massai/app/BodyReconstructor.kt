@@ -6,6 +6,8 @@ import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.Segmentation
 import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions
+import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
+import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import java.io.Closeable
 import java.nio.ByteOrder
 import kotlin.math.ceil
@@ -49,30 +51,68 @@ class BodyReconstructor : Closeable {
         val measuredAngle: Boolean
     )
 
-    private val options = SelfieSegmenterOptions.Builder()
+    private val humanOptions = SelfieSegmenterOptions.Builder()
         .setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE)
         .build()
 
-    private val segmenter = Segmentation.getClient(options)
+    private val humanSegmenter = Segmentation.getClient(humanOptions)
+
+    private val objectOptions = SubjectSegmenterOptions.Builder()
+        .enableForegroundConfidenceMask()
+        .build()
+
+    private val objectSegmenter = SubjectSegmentation.getClient(objectOptions)
 
     fun reconstruct(
         frames: List<ReconstructionFrame>,
         bodyHeightM: Double,
+        mode: SegmentationMode = SegmentationMode.HUMAN,
         progress: (stage: String, current: Int, total: Int) -> Unit = { _, _, _ -> }
     ): BodyReconstruction {
-        require(bodyHeightM in 1.0..2.5) { "Taille physique invalide." }
+        when (mode) {
+            SegmentationMode.HUMAN ->
+                require(bodyHeightM in 1.0..2.5) { "Taille humaine invalide." }
+            SegmentationMode.OBJECT ->
+                require(bodyHeightM in 0.05..2.5) { "Hauteur objet invalide." }
+        }
+
+        if (mode == SegmentationMode.OBJECT) {
+            progress("Préparation segmentation objet", 0, 1)
+            try {
+                Tasks.await(objectSegmenter.initTask)
+            } catch (e: Exception) {
+                throw IllegalStateException(
+                    "Le modèle de segmentation objet n'est pas encore disponible. " +
+                        "Gardez Internet actif puis relancez l'analyse dans quelques instants.",
+                    e
+                )
+            }
+        }
 
         val silhouettes = ArrayList<Silhouette>()
         frames.forEachIndexed { index, frame ->
             progress("Segmentation silhouette", index + 1, frames.size)
-            val bitmap = decodeScaled(frame.file.absolutePath, 480) ?: return@forEachIndexed
+            val maxDimension = if (mode == SegmentationMode.OBJECT) 640 else 480
+            val bitmap = decodeScaled(frame.file.absolutePath, maxDimension)
+                ?: return@forEachIndexed
+
             try {
-                segment(
-                    bitmap = bitmap,
-                    bodyHeightM = bodyHeightM,
-                    angleRad = frame.angleRad,
-                    measuredAngle = frame.measuredAngle
-                )?.let(silhouettes::add)
+                val silhouette = when (mode) {
+                    SegmentationMode.HUMAN -> segmentHuman(
+                        bitmap = bitmap,
+                        bodyHeightM = bodyHeightM,
+                        angleRad = frame.angleRad,
+                        measuredAngle = frame.measuredAngle
+                    )
+
+                    SegmentationMode.OBJECT -> segmentObject(
+                        bitmap = bitmap,
+                        bodyHeightM = bodyHeightM,
+                        angleRad = frame.angleRad,
+                        measuredAngle = frame.measuredAngle
+                    )
+                }
+                silhouette?.let(silhouettes::add)
             } finally {
                 bitmap.recycle()
             }
@@ -217,14 +257,14 @@ class BodyReconstructor : Closeable {
         )
     }
 
-    private fun segment(
+    private fun segmentHuman(
         bitmap: Bitmap,
         bodyHeightM: Double,
         angleRad: Double,
         measuredAngle: Boolean
     ): Silhouette? {
         val image = InputImage.fromBitmap(bitmap, 0)
-        val mask = Tasks.await(segmenter.process(image))
+        val mask = Tasks.await(humanSegmenter.process(image))
         val width = mask.width
         val height = mask.height
         if (width <= 0 || height <= 0) return null
@@ -236,6 +276,56 @@ class BodyReconstructor : Closeable {
         if (floatBuffer.remaining() < data.size) return null
         floatBuffer.get(data)
 
+        return buildSilhouette(
+            data = data,
+            width = width,
+            height = height,
+            bodyHeightM = bodyHeightM,
+            angleRad = angleRad,
+            measuredAngle = measuredAngle,
+            threshold = 0.60f
+        )
+    }
+
+    private fun segmentObject(
+        bitmap: Bitmap,
+        bodyHeightM: Double,
+        angleRad: Double,
+        measuredAngle: Boolean
+    ): Silhouette? {
+        val image = InputImage.fromBitmap(bitmap, 0)
+        val result = Tasks.await(objectSegmenter.process(image))
+        val mask = result.foregroundConfidenceMask ?: return null
+        val width = image.width
+        val height = image.height
+        if (width <= 0 || height <= 0) return null
+
+        val data = FloatArray(width * height)
+        val buffer = mask.duplicate()
+        buffer.rewind()
+        if (buffer.remaining() < data.size) return null
+        buffer.get(data)
+
+        return buildSilhouette(
+            data = data,
+            width = width,
+            height = height,
+            bodyHeightM = bodyHeightM,
+            angleRad = angleRad,
+            measuredAngle = measuredAngle,
+            threshold = 0.50f
+        )
+    }
+
+    private fun buildSilhouette(
+        data: FloatArray,
+        width: Int,
+        height: Int,
+        bodyHeightM: Double,
+        angleRad: Double,
+        measuredAngle: Boolean,
+        threshold: Float
+    ): Silhouette? {
         val minRowPixels = max(2, width / 120)
         val left = IntArray(height) { width }
         val right = IntArray(height) { -1 }
@@ -244,7 +334,7 @@ class BodyReconstructor : Closeable {
         for (y in 0 until height) {
             val offset = y * width
             for (x in 0 until width) {
-                if (data[offset + x] >= FOREGROUND_THRESHOLD) {
+                if (data[offset + x] >= threshold) {
                     if (x < left[y]) left[y] = x
                     right[y] = x
                     count[y]++
@@ -262,8 +352,8 @@ class BodyReconstructor : Closeable {
         }
 
         if (top < 0 || bottom <= top) return null
-        val bodyHeightPx = bottom - top + 1
-        if (bodyHeightPx < height * 0.28) return null
+        val subjectHeightPx = bottom - top + 1
+        if (subjectHeightPx < height * 0.20) return null
 
         val defaultCenter = run {
             var sum = 0.0
@@ -294,7 +384,7 @@ class BodyReconstructor : Closeable {
             }
         }
 
-        val pxPerMeter = bodyHeightPx.toDouble() / bodyHeightM
+        val pxPerMeter = subjectHeightPx.toDouble() / bodyHeightM
         val maxSpanMeters = maxSpanPx.toDouble() / pxPerMeter
 
         return Silhouette(
@@ -459,7 +549,8 @@ class BodyReconstructor : Closeable {
     private fun bool(value: Boolean): Int = if (value) 1 else 0
 
     override fun close() {
-        segmenter.close()
+        humanSegmenter.close()
+        objectSegmenter.close()
     }
 
     companion object {
