@@ -157,8 +157,18 @@ class SpiralGuideView @JvmOverloads constructor(
                 canvas.drawArc(oval, start, step * 0.88f, false, coveredPaint)
             }
 
-            if (level == activeLevel) {
-                canvas.drawOval(oval, activePaint)
+            if (isLevelComplete(level)) {
+                canvas.drawOval(oval, coveredPaint)
+            } else if (level == activeLevel) {
+                val currentBin = binFor(currentYawRad)
+                val step = 360f / BINS.toFloat()
+                canvas.drawArc(
+                    oval,
+                    currentBin * step - 90f,
+                    step * 0.9f,
+                    false,
+                    activePaint
+                )
             } else if (level == pendingLevel) {
                 canvas.drawOval(oval, pendingPaint)
             }
@@ -178,6 +188,16 @@ class SpiralGuideView @JvmOverloads constructor(
                 }
                 previousCompletedPointX = px
                 previousCompletedPointY = py
+            }
+        }
+
+        pendingLevel?.let { next ->
+            val previous = (next - 1).coerceAtLeast(0)
+            if (isLevelComplete(previous)) {
+                val fromCy = topY + (LEVELS - 1 - previous) * spacing
+                val toCy = topY + (LEVELS - 1 - next) * spacing
+                val x = cx + ringWidth * 0.5f
+                canvas.drawLine(x, fromCy, x, toCy, connectorPaint)
             }
         }
 
