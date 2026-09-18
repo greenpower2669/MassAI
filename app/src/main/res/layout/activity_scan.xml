@@ -10,6 +10,14 @@
         android:layout_height="match_parent"
         android:contentDescription="Aperçu caméra du scan corporel" />
 
+    <fr.massai.app.SpiralGuideView
+        android:id="@+id/spiralGuideView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:clickable="false"
+        android:focusable="false" />
+
     <TextView
         android:id="@+id/scanGuideText"
         android:layout_width="match_parent"
@@ -48,6 +56,14 @@
             android:textColor="@android:color/white"
             android:textSize="16sp"
             android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/nextLevelButton"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginBottom="8dp"
+            android:text="ALIGNÉ — NIVEAU SUIVANT"
+            android:visibility="gone" />
 
         <Button
             android:id="@+id/recordButton"
