@@ -1,0 +1,53 @@
+name: Publish MassAI v0.4.0 Release
+
+on:
+  push:
+    branches: [ "massai-v0.1-poc" ]
+    paths:
+      - ".github/workflows/release-v0.4.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Test and build release
+        run: gradle clean testDebugUnitTest :app:assembleRelease :app:bundleRelease --stacktrace
+
+      - name: Rename outputs
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk MassAI-v0.4.0-release.apk
+          cp app/build/outputs/bundle/release/app-release.aab MassAI-v0.4.0-release.aab
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v0.4.0 >/dev/null 2>&1; then
+            gh release upload v0.4.0 MassAI-v0.4.0-release.apk MassAI-v0.4.0-release.aab --clobber
+          else
+            gh release create v0.4.0 \
+              MassAI-v0.4.0-release.apk \
+              MassAI-v0.4.0-release.aab \
+              --title "MassAI v0.4.0" \
+              --notes "Angles de scan mesurés par le téléphone, couverture 360°, sélection de vues par netteté et angle, reconstruction visual-hull, volume et densité. Les vidéos importées gardent un mode de secours à angles estimés. POC non encore validé métrologiquement." \
+              --target "$GITHUB_SHA"
+          fi
