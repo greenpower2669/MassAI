@@ -2,81 +2,101 @@
 
 POC Android de reconstruction 3D corporelle / humanoïde à partir d'un smartphone.
 
-## État actuel — v0.6.0
+## État actuel — v0.7.0
 
-La v0.6 conserve les deux modes de segmentation de la v0.5 :
+La v0.7 ajoute un **guide hélicoïdal multi-niveaux** pendant la capture native.
 
-- **Humain** : segmentation personne.
-- **Objet / humanoïde** : segmentation générique du sujet.
+### Guide de scan
 
-Elle ajoute surtout un nettoyage géométrique conservateur avant le calcul du volume.
+Le scan est découpé en trois niveaux :
 
-### Pipeline actuel
+1. anneau bas ;
+2. anneau milieu ;
+3. anneau haut.
 
-1. capture CameraX ou import vidéo ;
-2. angles téléphone mesurés pour les scans filmés dans MassAI ;
-3. extraction de 48 images candidates ;
-4. tri netteté / redondance / couverture ;
-5. sélection d'environ 20 vues ;
-6. segmentation selon le mode choisi ;
-7. visual hull voxelisé ;
-8. **suppression des petits îlots voxelisés déconnectés** ;
-9. réparation morphologique légère ;
-10. deuxième passe de nettoyage ;
-11. visualisation 3D brut / réparé / corrections ;
-12. mise à l'échelle par la hauteur ;
-13. volume ;
-14. densité si un poids est renseigné.
+Chaque anneau est divisé en 72 secteurs angulaires.
 
-## Nettoyage v0.6
+La ligne acquise reste ouverte pendant le tour. Lorsqu'au moins 66 secteurs sur 72 sont couverts, la boucle est validée et se ferme visuellement. MassAI affiche alors l'anneau supérieur et demande à l'utilisateur de monter le téléphone avant de continuer.
 
-Le nettoyage ne force pas le sujet à devenir une seule composante.
+Les images acquises pendant la transition verticale sont marquées comme transition et ne sont pas utilisées pour la sélection des vues de reconstruction.
 
-C'est volontaire : un bras, une jambe ou un pied peut être temporairement séparé à cause d'une mauvaise reconstruction. MassAI conserve donc les composantes significatives et retire seulement les petits amas parasites.
+### Métadonnées v2
 
-L'écran de résultat affiche maintenant :
-- voxels parasites supprimés ;
-- nombre de composantes avant nettoyage ;
-- nombre de composantes après nettoyage.
+Chaque échantillon d'orientation contient désormais :
 
-La vue **BRUT** conserve la reconstruction originale pour comparaison.
-La vue **RÉPARÉ** montre la reconstruction après nettoyage/réparation.
+- temps ;
+- yaw déroulé ;
+- niveau de capture.
+
+Le fichier de session enregistre également :
+
+- nombre de niveaux demandés ;
+- nombre de niveaux terminés ;
+- couverture angulaire circulaire par niveau.
+
+Les anciens fichiers restent lisibles : un échantillon sans niveau est interprété comme niveau 0.
+
+### Sélection des vues
+
+Pour un scan multi-niveaux :
+
+- 72 images candidates sont extraites au lieu de 48 ;
+- jusqu'à 24 vues sont retenues au lieu de 20 ;
+- les transitions verticales sont ignorées ;
+- les angles sont ramenés sur un tour complet ;
+- la meilleure image de chaque secteur angulaire est sélectionnée, quel que soit le niveau où elle a été capturée.
+
+Important : la v0.7 **ne mesure pas encore la hauteur réelle de la caméra**. Le guide vertical améliore l'acquisition et prépare les métadonnées, mais une exploitation géométrique métrique des différences de hauteur nécessitera une pose caméra 6 DoF / ARCore et une vraie projection perspective.
+
+### Pipeline
+
+Capture / import vidéo
+→ angles et niveaux
+→ sélection des vues
+→ segmentation
+→ visual hull
+→ nettoyage des îlots
+→ réparation voxel
+→ modèle 3D
+→ volume
+→ densité si le poids est renseigné.
 
 ## Posture recommandée
 
-Pour le mode humain :
 - sujet immobile ;
-- bras abaissés et légèrement écartés du torse ;
+- bras abaissés et légèrement écartés ;
 - pieds séparés ;
 - corps entier visible ;
-- tour régulier autour du sujet.
+- distance la plus régulière possible ;
+- suivre successivement les trois anneaux.
 
-## Limites actuelles
+## Limites
 
-La reconstruction reste un **visual hull POC** et non une photogrammétrie SfM/MVS métrique validée.
+Il manque encore notamment :
 
-Il manque encore :
+- pose caméra 6 DoF et hauteur métrique ;
+- intrinsics / perspective réelle ;
 - squelette anatomique ;
 - régions corporelles ;
 - maillage triangulé ;
-- perspective caméra métrique / pose 6 DoF ;
-- plan du sol et traitement dédié des deux pieds ;
-- validation expérimentale du volume ;
+- plan du sol et traitement dédié des pieds ;
+- validation scientifique du volume ;
 - modèle graisse / muscle calibré.
 
 ## Build
 
 - Android natif Kotlin
 - package : fr.massai.app
-- versionCode : 6
-- versionName : 0.6.0
+- versionCode : 7
+- versionName : 0.7.0
 - minSdk 26
 - targetSdk 35
 - compileSdk 35
 
 La release produit :
-- `MassAI-v0.6.0-release.apk`
-- `MassAI-v0.6.0-release.aab`
+
+- `MassAI-v0.7.0-release.apk`
+- `MassAI-v0.7.0-release.aab`
 
 La signature release utilise encore temporairement la clé debug Android pour les essais du POC.
 
