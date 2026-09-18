@@ -4,7 +4,9 @@
 
     <application
         android:theme="@style/Theme.MassAI"
-        android:label="MassAI">
+        android:label="MassAI"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
 
         <activity
             android:name=".ScanActivity"
