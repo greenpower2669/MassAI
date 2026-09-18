@@ -117,7 +117,7 @@ class MainActivity : AppCompatActivity() {
         selectedVideo = uri
         selectedMetadataFile = metadataFile?.takeIf { it.exists() }
 
-        val metadata = selectedMetadataFile?.let(ScanMetadata::readFrom)
+        val metadata = selectedMetadataFile?.let { ScanMetadata.readFrom(it) }
         val angleInfo = when {
             metadata?.sensorAvailable == true && metadata.samples.size >= 8 ->
                 "Angles téléphone : ${metadata.coverageDegrees.roundToInt()}° mesurés"
@@ -182,7 +182,7 @@ class MainActivity : AppCompatActivity() {
 
         Thread {
             try {
-                val metadata = selectedMetadataFile?.let(ScanMetadata::readFrom)
+                val metadata = selectedMetadataFile?.let { ScanMetadata.readFrom(it) }
 
                 if (
                     metadata?.sensorAvailable == true &&
