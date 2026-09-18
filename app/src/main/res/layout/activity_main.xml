@@ -8,7 +8,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:padding="20dp">
 
         <TextView
             android:layout_width="wrap_content"
@@ -20,8 +20,8 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="20dp"
-            android:text="Photogrammétrie corporelle — POC v0.2"
+            android:layout_marginBottom="18dp"
+            android:text="Reconstruction corporelle — POC v0.3"
             android:textSize="16sp" />
 
         <TextView
@@ -50,8 +50,8 @@
             android:id="@+id/captureButton"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:layout_marginTop="14dp"
-            android:text="FILMER LE SCAN" />
+            android:layout_marginTop="12dp"
+            android:text="FILMER LE SCAN 360°" />
 
         <Button
             android:id="@+id/importButton"
@@ -64,7 +64,7 @@
             android:id="@+id/statusText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
+            android:layout_marginTop="16dp"
             android:text="Aucun scan chargé"
             android:textSize="16sp" />
 
@@ -72,14 +72,14 @@
             android:id="@+id/analysisButton"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="12dp"
             android:enabled="false"
-            android:text="ANALYSER LE SCAN" />
+            android:text="RECONSTRUIRE LE CORPS 3D" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="26dp"
+            android:layout_marginTop="24dp"
             android:text="MODÈLE 3D"
             android:textSize="18sp"
             android:textStyle="bold" />
@@ -87,10 +87,16 @@
         <FrameLayout
             android:id="@+id/modelPanel"
             android:layout_width="match_parent"
-            android:layout_height="250dp"
+            android:layout_height="330dp"
             android:layout_marginTop="8dp"
             android:background="@drawable/model_panel"
-            android:contentDescription="Zone d'affichage du modèle 3D">
+            android:contentDescription="Zone interactive du modèle corporel 3D">
+
+            <fr.massai.app.BodyModelView
+                android:id="@+id/bodyModelView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="Modèle corporel 3D rotatif" />
 
             <TextView
                 android:id="@+id/modelStatusText"
@@ -98,7 +104,7 @@
                 android:layout_height="match_parent"
                 android:gravity="center"
                 android:padding="24dp"
-                android:text="Aucun maillage 3D généré\nLa reconstruction s'affichera ici."
+                android:text="Aucune reconstruction\nFilmez ou importez un tour complet du sujet."
                 android:textAlignment="center"
                 android:textColor="@android:color/white"
                 android:textSize="18sp" />
@@ -131,13 +137,20 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:enabled="false"
-                android:text="TROUS" />
+                android:text="CORRECTIONS" />
         </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="8dp"
+            android:text="Glissez sur le modèle pour le tourner. Pincez pour zoomer."
+            android:textSize="14sp" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="22dp"
             android:text="PIPELINE"
             android:textSize="18sp"
             android:textStyle="bold" />
@@ -148,13 +161,13 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:lineSpacingExtra="4dp"
-            android:text="○ Extraction des images\n○ Sélection qualité\n○ Segmentation silhouette\n○ Reconstruction 3D\n○ Sol et pieds\n○ Réparation / watertight\n○ Mise à l'échelle\n○ Volume et densité"
+            android:text="○ Extraction des vues\n○ Segmentation silhouette\n○ Visual hull 3D\n○ Réparation voxel\n○ Mise à l'échelle\n○ Volume et densité"
             android:textSize="16sp" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="22dp"
             android:text="RÉSULTATS"
             android:textSize="18sp"
             android:textStyle="bold" />
@@ -163,11 +176,19 @@
             android:id="@+id/metricsText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
+            android:layout_marginBottom="8dp"
             android:layout_marginTop="8dp"
             android:lineSpacingExtra="4dp"
-            android:text="Volume : —\nDensité : —\nQualité : —"
+            android:text="Volume : —\nDensité : —\nQualité technique : —"
             android:textSize="17sp" />
+
+        <TextView
+            android:id="@+id/methodText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:text="Méthode POC : enveloppe visuelle 3D à partir de silhouettes multi-vues. Ce n'est pas encore une photogrammétrie SfM/MVS métrique validée."
+            android:textSize="13sp" />
 
     </LinearLayout>
 </ScrollView>
