@@ -34,10 +34,20 @@
             android:id="@+id/recordStatusText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingBottom="8dp"
+            android:paddingBottom="6dp"
             android:text="Caméra prête"
             android:textColor="@android:color/white"
             android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/coverageText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="10dp"
+            android:text="Couverture angulaire : prête"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/recordButton"
