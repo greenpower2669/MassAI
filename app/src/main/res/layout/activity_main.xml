@@ -21,7 +21,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="18dp"
-            android:text="Reconstruction corporelle — POC v0.3"
+            android:text="Reconstruction corporelle — POC v0.4"
             android:textSize="16sp" />
 
         <TextView
@@ -187,7 +187,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
-            android:text="Méthode POC : enveloppe visuelle 3D à partir de silhouettes multi-vues. Ce n'est pas encore une photogrammétrie SfM/MVS métrique validée."
+            android:text="Méthode POC : enveloppe visuelle 3D à partir de silhouettes multi-vues. Les scans filmés utilisent désormais les angles mesurés du téléphone ; les vidéos importées utilisent encore une estimation uniforme."
             android:textSize="13sp" />
 
     </LinearLayout>
