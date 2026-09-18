@@ -116,8 +116,7 @@ object FrameSelector {
         val hasMeasuredAngles =
             metadata != null &&
             metadata.sensorAvailable &&
-            metadata.samples.size >= 8 &&
-            metadata.coverageDegrees >= 180.0
+            metadata.samples.size >= 8
 
         val selected = if (hasMeasuredAngles) {
             selectByMeasuredAngle(candidates, wanted, metadata!!)
