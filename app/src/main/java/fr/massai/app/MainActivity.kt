@@ -14,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
+import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
 
@@ -30,6 +31,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bodyModelView: BodyModelView
 
     private var selectedVideo: Uri? = null
+    private var selectedMetadataFile: File? = null
 
     private val importVideoLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -42,7 +44,11 @@ class MainActivity : AppCompatActivity() {
                 } catch (_: SecurityException) {
                     // Certains fournisseurs ne proposent pas de permission persistante.
                 }
-                setVideo(it, "Vidéo importée")
+                setVideo(
+                    uri = it,
+                    sourceLabel = "Vidéo importée",
+                    metadataFile = null
+                )
             }
         }
 
@@ -50,8 +56,14 @@ class MainActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
                 val uriString = result.data?.getStringExtra(ScanActivity.EXTRA_VIDEO_URI)
+                val metadataPath = result.data?.getStringExtra(ScanActivity.EXTRA_METADATA_PATH)
+
                 if (!uriString.isNullOrBlank()) {
-                    setVideo(Uri.parse(uriString), "Scan filmé")
+                    setVideo(
+                        uri = Uri.parse(uriString),
+                        sourceLabel = "Scan filmé",
+                        metadataFile = metadataPath?.let(::File)
+                    )
                 }
             }
         }
@@ -97,18 +109,38 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setVideo(uri: Uri, sourceLabel: String) {
+    private fun setVideo(
+        uri: Uri,
+        sourceLabel: String,
+        metadataFile: File?
+    ) {
         selectedVideo = uri
-        statusText.text = "$sourceLabel ✓\nPrêt pour la reconstruction 3D."
+        selectedMetadataFile = metadataFile?.takeIf { it.exists() }
+
+        val metadata = selectedMetadataFile?.let(ScanMetadata::readFrom)
+        val angleInfo = when {
+            metadata?.sensorAvailable == true && metadata.samples.size >= 8 ->
+                "Angles téléphone : ${metadata.coverageDegrees.roundToInt()}° mesurés"
+            sourceLabel.startsWith("Vidéo importée") ->
+                "Angles : estimation uniforme (vidéo importée)"
+            else ->
+                "Angles : mode de secours"
+        }
+
+        statusText.text = "$sourceLabel ✓\n$angleInfo"
         modelStatusText.visibility = View.VISIBLE
         modelStatusText.text =
             "Vidéo prête ✓\nRenseignez taille et poids puis lancez la reconstruction."
+
         bodyModelView.clear()
         setModelButtonsEnabled(false)
-        metricsText.text = "Volume : —\nDensité : —\nQualité technique : —"
+        metricsText.text =
+            "Volume : —\nDensité : —\nQualité technique : —\nCouverture : —"
+
         analysisButton.isEnabled = true
         pipelineText.text =
-            "○ Extraction des vues\n" +
+            "○ Extraction des candidates\n" +
+            "○ Netteté / redondance / angles\n" +
             "○ Segmentation silhouette\n" +
             "○ Visual hull 3D\n" +
             "○ Réparation voxel\n" +
@@ -137,10 +169,11 @@ class MainActivity : AppCompatActivity() {
         analysisButton.isEnabled = false
         setModelButtonsEnabled(false)
         modelStatusText.visibility = View.VISIBLE
-        modelStatusText.text = "Préparation des vues…"
-        statusText.text = "Extraction des vues candidates…"
+        modelStatusText.text = "Préparation et contrôle des vues…"
+        statusText.text = "Extraction des images candidates…"
         pipelineText.text =
-            "◉ Extraction des vues…\n" +
+            "◉ Extraction des candidates…\n" +
+            "○ Netteté / redondance / angles\n" +
             "○ Segmentation silhouette\n" +
             "○ Visual hull 3D\n" +
             "○ Réparation voxel\n" +
@@ -149,16 +182,63 @@ class MainActivity : AppCompatActivity() {
 
         Thread {
             try {
-                val frames = extractFrames(uri, 20)
-                if (frames.size < 8) {
+                val metadata = selectedMetadataFile?.let(ScanMetadata::readFrom)
+
+                if (
+                    metadata?.sensorAvailable == true &&
+                    metadata.samples.size >= 8 &&
+                    metadata.coverageDegrees < 300.0
+                ) {
                     throw IllegalStateException(
-                        "Seulement ${frames.size} images ont pu être extraites."
+                        "Tour incomplet : ${metadata.coverageDegrees.roundToInt()}° mesurés. " +
+                            "Refaites le scan en dépassant 300°."
+                    )
+                }
+
+                val candidates = extractCandidates(uri, 48)
+                if (candidates.size < 12) {
+                    throw IllegalStateException(
+                        "Seulement ${candidates.size} images candidates ont pu être extraites."
                     )
                 }
 
                 runOnUiThread {
                     pipelineText.text =
-                        "✓ Extraction des vues (${frames.size})\n" +
+                        "✓ Extraction des candidates (${candidates.size})\n" +
+                        "◉ Netteté / redondance / angles…\n" +
+                        "○ Segmentation silhouette\n" +
+                        "○ Visual hull 3D\n" +
+                        "○ Réparation voxel\n" +
+                        "○ Mise à l'échelle\n" +
+                        "○ Volume et densité"
+                    statusText.text = "Sélection des meilleures vues…"
+                }
+
+                var frames = FrameSelector.select(
+                    candidates = candidates,
+                    wanted = 20,
+                    metadata = metadata
+                )
+
+                if (frames.none { it.measuredAngle } && frames.isNotEmpty()) {
+                    val n = frames.size
+                    frames = frames.mapIndexed { index, frame ->
+                        frame.copy(
+                            angleRad = 2.0 * Math.PI * index.toDouble() / n.toDouble()
+                        )
+                    }
+                }
+
+                if (frames.size < 8) {
+                    throw IllegalStateException(
+                        "Seulement ${frames.size} vues ont passé le contrôle qualité."
+                    )
+                }
+
+                runOnUiThread {
+                    pipelineText.text =
+                        "✓ Extraction des candidates (${candidates.size})\n" +
+                        "✓ Sélection qualité (${frames.size} vues)\n" +
                         "◉ Segmentation silhouette…\n" +
                         "○ Visual hull 3D\n" +
                         "○ Réparation voxel\n" +
@@ -175,8 +255,9 @@ class MainActivity : AppCompatActivity() {
                             when (stage) {
                                 "Segmentation silhouette" -> {
                                     pipelineText.text =
-                                        "✓ Extraction des vues (${frames.size})\n" +
-                                        "◉ Segmentation silhouette$current/$total\n" +
+                                        "✓ Extraction des candidates (${candidates.size})\n" +
+                                        "✓ Sélection qualité (${frames.size} vues)\n" +
+                                        "◉ Segmentation silhouette $current/$total\n" +
                                         "○ Visual hull 3D\n" +
                                         "○ Réparation voxel\n" +
                                         "○ Mise à l'échelle\n" +
@@ -185,9 +266,10 @@ class MainActivity : AppCompatActivity() {
 
                                 "Construction du visual hull" -> {
                                     pipelineText.text =
-                                        "✓ Extraction des vues (${frames.size})\n" +
+                                        "✓ Extraction des candidates (${candidates.size})\n" +
+                                        "✓ Sélection qualité (${frames.size} vues)\n" +
                                         "✓ Segmentation silhouette\n" +
-                                        "◉ Visual hull 3D$current/$total\n" +
+                                        "◉ Visual hull 3D $current/$total\n" +
                                         "○ Réparation voxel\n" +
                                         "○ Mise à l'échelle\n" +
                                         "○ Volume et densité"
@@ -195,7 +277,8 @@ class MainActivity : AppCompatActivity() {
 
                                 "Réparation voxel" -> {
                                     pipelineText.text =
-                                        "✓ Extraction des vues (${frames.size})\n" +
+                                        "✓ Extraction des candidates (${candidates.size})\n" +
+                                        "✓ Sélection qualité (${frames.size} vues)\n" +
                                         "✓ Segmentation silhouette\n" +
                                         "✓ Visual hull 3D\n" +
                                         "◉ Réparation voxel…\n" +
@@ -209,9 +292,16 @@ class MainActivity : AppCompatActivity() {
 
                 val liters = BodyMath.liters(result.repairedVolumeM3)
                 val rawLiters = BodyMath.liters(result.rawVolumeM3)
-                val kgPerLiter = BodyMath.densityKgPerLiter(weightKg, result.repairedVolumeM3)
-                val kgPerM3 = BodyMath.densityKgPerM3(weightKg, result.repairedVolumeM3)
+                val kgPerLiter = BodyMath.densityKgPerLiter(
+                    weightKg,
+                    result.repairedVolumeM3
+                )
+                val kgPerM3 = BodyMath.densityKgPerM3(
+                    weightKg,
+                    result.repairedVolumeM3
+                )
                 val repairPct = result.repairFraction * 100.0
+                val angleLabel = if (result.anglesMeasured) "mesurée" else "estimée"
 
                 runOnUiThread {
                     bodyModelView.setReconstruction(result)
@@ -220,7 +310,8 @@ class MainActivity : AppCompatActivity() {
                     repairedButton.performClick()
 
                     pipelineText.text =
-                        "✓ Extraction des vues (${frames.size})\n" +
+                        "✓ Extraction des candidates (${candidates.size})\n" +
+                        "✓ Sélection qualité (${frames.size} vues)\n" +
                         "✓ Segmentation silhouette (${result.validViews} valides)\n" +
                         "✓ Visual hull 3D\n" +
                         "✓ Réparation voxel\n" +
@@ -233,17 +324,21 @@ class MainActivity : AppCompatActivity() {
                             "Volume brut voxel : %.1f L\n" +
                             "Densité : %.3f kg/L  •  %.0f kg/m³\n" +
                             "Qualité technique : %d/100\n" +
+                            "Couverture : %.0f° (%s)\n" +
                             "Corrections : %.2f %% des voxels",
                         liters,
                         rawLiters,
                         kgPerLiter,
                         kgPerM3,
                         result.quality,
+                        result.angularCoverageDeg,
+                        angleLabel,
                         repairPct
                     )
 
                     statusText.text =
-                        "Reconstruction 3D terminée ✓ — ${result.validViews}/${result.totalViews} vues exploitables."
+                        "Reconstruction terminée ✓ — " +
+                            "${result.validViews}/${result.totalViews} vues exploitables."
                     analysisButton.isEnabled = true
                 }
             } catch (e: Exception) {
@@ -251,21 +346,26 @@ class MainActivity : AppCompatActivity() {
                     analysisButton.isEnabled = true
                     setModelButtonsEnabled(false)
                     modelStatusText.visibility = View.VISIBLE
-                    modelStatusText.text = "Reconstruction impossible\n${e.message ?: "Erreur inconnue"}"
-                    statusText.text = "Échec de reconstruction : ${e.message ?: "erreur inconnue"}"
+                    modelStatusText.text =
+                        "Reconstruction impossible\n${e.message ?: "Erreur inconnue"}"
+                    statusText.text =
+                        "Échec de reconstruction : ${e.message ?: "erreur inconnue"}"
                 }
             }
         }.start()
     }
 
-    private fun extractFrames(uri: Uri, wanted: Int): List<File> {
+    private fun extractCandidates(
+        uri: Uri,
+        wanted: Int
+    ): List<CandidateFrame> {
         val outputDir = File(cacheDir, "massai_frames").apply {
             mkdirs()
             listFiles()?.forEach { it.delete() }
         }
 
         val retriever = MediaMetadataRetriever()
-        val files = ArrayList<File>()
+        val candidates = ArrayList<CandidateFrame>()
 
         try {
             retriever.setDataSource(this, uri)
@@ -278,24 +378,37 @@ class MainActivity : AppCompatActivity() {
 
             for (i in 0 until wanted) {
                 val fraction = (i + 0.5).toDouble() / wanted.toDouble()
-                val timeUs = (durationMs * 1000.0 * fraction).toLong()
+                val timeMs = (durationMs * fraction).toLong()
                 val bitmap = retriever.getFrameAtTime(
-                    timeUs,
+                    timeMs * 1000L,
                     MediaMetadataRetriever.OPTION_CLOSEST
                 ) ?: continue
 
-                val file = File(outputDir, "frame_%03d.jpg".format(i + 1))
+                val blurScore = FrameQuality.blurScore(bitmap)
+                val signature = FrameQuality.signature(bitmap)
+
+                val file = File(outputDir, "candidate_%03d.jpg".format(i + 1))
                 FileOutputStream(file).use { stream ->
-                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, stream)
+                    bitmap.compress(
+                        android.graphics.Bitmap.CompressFormat.JPEG,
+                        90,
+                        stream
+                    )
                 }
                 bitmap.recycle()
-                files.add(file)
+
+                candidates += CandidateFrame(
+                    file = file,
+                    timeMs = timeMs,
+                    blurScore = blurScore,
+                    signature = signature
+                )
             }
         } finally {
             retriever.release()
         }
 
-        return files
+        return candidates
     }
 
     private fun setModelButtonsEnabled(enabled: Boolean) {
