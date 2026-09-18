@@ -1,0 +1,53 @@
+name: Publish MassAI v0.3.0 Release
+
+on:
+  push:
+    branches: [ "massai-v0.1-poc" ]
+    paths:
+      - ".github/workflows/release-v0.3.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Test and build release
+        run: gradle clean testDebugUnitTest :app:assembleRelease :app:bundleRelease --stacktrace
+
+      - name: Rename outputs
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk MassAI-v0.3.0-release.apk
+          cp app/build/outputs/bundle/release/app-release.aab MassAI-v0.3.0-release.aab
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v0.3.0 >/dev/null 2>&1; then
+            gh release upload v0.3.0 MassAI-v0.3.0-release.apk MassAI-v0.3.0-release.aab --clobber
+          else
+            gh release create v0.3.0 \
+              MassAI-v0.3.0-release.apk \
+              MassAI-v0.3.0-release.aab \
+              --title "MassAI v0.3.0" \
+              --notes "Première reconstruction corporelle 3D locale par visual hull voxelisé : CameraX, segmentation ML Kit, modèle 3D interactif, volume, densité et contrôle des corrections. POC non encore validé métrologiquement. APK/AAB release signés temporairement avec la clé debug Android pour les tests." \
+              --target "$GITHUB_SHA"
+          fi
