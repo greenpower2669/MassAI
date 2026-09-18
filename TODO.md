@@ -1,59 +1,64 @@
-# MassAI — TODO après v0.7.0
+# MassAI — TODO après v0.8.0
 
 ## Réalisé
 
 - capture CameraX ;
 - import vidéo ;
-- mode Humain et mode Objet / humanoïde ;
-- angles téléphone ;
-- guide hélicoïdal 3 niveaux bas / milieu / haut ;
-- couverture sectorielle 72 bins par niveau ;
-- fermeture visuelle seulement après couverture suffisante ;
-- exclusion des frames de transition verticale ;
-- métadonnées de niveau version 2 ;
-- sélection multi-niveaux par angle circulaire ;
-- 72 candidates / 24 vues sur scans multi-niveaux ;
-- visual hull voxelisé ;
-- nettoyage conservateur des petits îlots ;
+- mode Humain et Objet / humanoïde ;
+- choix Simple / Standard / Précis / Manuel ;
+- 1 à 5 passages ;
+- guide hélicoïdal dynamique ;
+- exclusion des transitions verticales ;
+- caméra Auto / normale / ultra grand-angle si exposée ;
+- fallback caméra arrière normale ;
+- enregistrement id caméra + focale ;
+- visual hull ;
+- nettoyage des îlots ;
 - réparation voxel ;
-- affichage brut / réparé / corrections ;
+- mesh triangulé réel ;
+- rendu mesh rempli et filaire ;
+- sauvegarde/rechargement .massai ;
+- export OBJ ;
 - volume et densité.
 
-## Prochain jalon prioritaire — v0.8
+## Prochain jalon géométrique
 
-- Ajouter une vue de diagnostic des masques 2D.
-- Ajouter le squelette humain 33 points sur le mode Humain.
-- Utiliser le squelette comme contrôle anatomique.
-- Ajouter l'affichage 3D Surface / Squelette / Régions / Corrections.
-- Découper le corps en régions : tête, tronc, bassin, bras, avant-bras, cuisses, jambes, pieds.
+- Ajouter pose caméra 6 DoF.
+- Exploiter réellement la hauteur des différents passages.
+- Lire et sauvegarder les intrinsics complets.
+- Corriger la distorsion de l'ultra grand-angle avant projection.
+- Remplacer/compléter le mesh voxel par marching cubes ou équivalent lissé.
+- Ajouter un vrai z-buffer/OpenGL si le mesh devient trop dense.
+- Ajouter plan du sol et fermeture dédiée des pieds.
 
-## Acquisition / géométrie
+## Anatomie
 
-- Intégrer une pose caméra 6 DoF lorsque disponible.
-- Exploiter les intrinsics caméra et une vraie projection perspective.
-- Transformer les trois niveaux visuels en hauteurs caméra métriques.
-- Contrôler la distance caméra-sujet.
-- Détecter le mouvement du sujet.
-- Ajouter plan du sol et repérage tête-sol.
-- Fermer indépendamment les deux semelles.
-- Ajouter un vrai maillage triangulé.
-- Quantifier les corrections par région.
-- Ajouter un score de confiance spatial.
-- Exporter GLB + JSON/CSV.
+- Ajouter diagnostic des masques 2D.
+- Ajouter squelette humain 33 points.
+- Contrôle anatomique bras/jambes/tête/pieds.
+- Découpage en régions.
+- Volumes régionaux.
+- Pas de graisse/muscle chiffré avant calibration et validation.
+
+## Sauvegarde
+
+- Étendre .massai à une session complète optionnelle avec vidéo ou frames retenues.
+- Export GLB en plus de OBJ.
+- Versionner les futurs formats de modèle.
+- Ajouter nom/date/commentaire au modèle.
 
 ## Validation
 
-- Tester le guide 1 niveau vs 3 niveaux sur la même figurine.
-- Comparer le nombre d'artefacts, la répétabilité du volume et les détails des membres.
-- Tester plusieurs fonds / contrastes.
-- Tester des objets de volume connu.
-- Répéter chaque scan pour mesurer biais et variance.
-- Valider ensuite sur humain avec une référence adaptée.
-- Rechercher dataset 3D + DXA avant toute estimation graisse / muscle.
+- Comparer 1 / 2 / 3 passages sur le même sujet.
+- Comparer caméra normale et ultra grand-angle sur le même objet.
+- Vérifier biais de volume induit par la distorsion grand-angle.
+- Tester objets de volume connu.
+- Mesurer répétabilité scan-sur-scan.
+- Tester plusieurs appareils Android.
+- Rechercher dataset 3D + DXA avant composition corporelle.
 
 ## Android / distribution
 
 - Remplacer la signature debug par une vraie clé de publication.
-- Ajouter tests instrumentés caméra / capteurs / permissions.
-- Ajouter retours vocaux et sonores pour changement de niveau.
-- Tester plusieurs appareils Android.
+- Ajouter tests instrumentés caméra/capteurs/permissions.
+- Ajouter retours vocaux et sonores.
