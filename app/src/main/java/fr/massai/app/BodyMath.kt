@@ -16,11 +16,41 @@ object BodyMath {
         return if (volumeM3 > 0.0) weightKg / volumeM3 else Double.NaN
     }
 
-    fun technicalQuality(validViews: Int, totalViews: Int, repairFraction: Double): Int {
+    fun technicalQuality(
+        validViews: Int,
+        totalViews: Int,
+        repairFraction: Double
+    ): Int {
+        return technicalQuality(
+            validViews = validViews,
+            totalViews = totalViews,
+            repairFraction = repairFraction,
+            coverageDegrees = 360.0
+        )
+    }
+
+    fun technicalQuality(
+        validViews: Int,
+        totalViews: Int,
+        repairFraction: Double,
+        coverageDegrees: Double
+    ): Int {
         if (totalViews <= 0) return 0
-        val viewScore = validViews.toDouble() / totalViews.toDouble()
+
+        val viewScore = (validViews.toDouble() / totalViews.toDouble())
+            .coerceIn(0.0, 1.0)
+        val coverageScore = (coverageDegrees / 330.0)
+            .coerceIn(0.0, 1.0)
         val repairPenalty = min(1.0, max(0.0, repairFraction) * 8.0)
-        return ((0.72 * viewScore + 0.28 * (1.0 - repairPenalty)) * 100.0)
+        val repairScore = 1.0 - repairPenalty
+
+        return (
+            (
+                0.42 * viewScore +
+                    0.34 * coverageScore +
+                    0.24 * repairScore
+                ) * 100.0
+            )
             .roundToInt()
             .coerceIn(0, 100)
     }
