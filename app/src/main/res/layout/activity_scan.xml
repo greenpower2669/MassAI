@@ -17,7 +17,7 @@
         android:layout_gravity="top"
         android:background="#99000000"
         android:padding="16dp"
-        android:text="Sujet immobile • corps entier visible • tournez lentement autour"
+        android:text="Sujet immobile • bras abaissés et légèrement écartés • pieds séparés • tournez lentement autour"
         android:textColor="@android:color/white"
         android:textSize="18sp"
         android:textStyle="bold" />
