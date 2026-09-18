@@ -17,7 +17,8 @@ data class ReconstructionFrame(
     val timeMs: Long,
     val angleRad: Double,
     val blurScore: Double,
-    val measuredAngle: Boolean
+    val measuredAngle: Boolean,
+    val scanLevel: Int = 0
 )
 
 object FrameQuality {
@@ -140,9 +141,14 @@ object FrameSelector {
 
             if (!tooBlurry && (!tooSimilar || index == selected.lastIndex)) {
                 val angle = if (hasMeasuredAngles) {
-                    metadata!!.angleAt(candidate.timeMs) ?: 0.0
+                    metadata!!.wrappedAngleAt(candidate.timeMs) ?: 0.0
                 } else {
                     2.0 * Math.PI * filtered.size.toDouble() / wanted.toDouble()
+                }
+                val scanLevel = if (hasMeasuredAngles) {
+                    metadata!!.levelAt(candidate.timeMs)?.coerceAtLeast(0) ?: 0
+                } else {
+                    0
                 }
 
                 filtered += ReconstructionFrame(
@@ -150,7 +156,8 @@ object FrameSelector {
                     timeMs = candidate.timeMs,
                     angleRad = angle,
                     blurScore = candidate.blurScore,
-                    measuredAngle = hasMeasuredAngles
+                    measuredAngle = hasMeasuredAngles,
+                    scanLevel = scanLevel
                 )
                 previousSignature = candidate.signature
             }
@@ -165,23 +172,27 @@ object FrameSelector {
         metadata: ScanMetadata
     ): List<CandidateFrame> {
         val withAngles = candidates.mapNotNull { candidate ->
-            metadata.angleAt(candidate.timeMs)?.let { angle -> candidate to angle }
+            val level = metadata.levelAt(candidate.timeMs) ?: return@mapNotNull null
+            if (level < 0) return@mapNotNull null
+
+            metadata.wrappedAngleAt(candidate.timeMs)?.let { angle ->
+                Triple(candidate, angle, level)
+            }
         }
         if (withAngles.isEmpty()) return emptyList()
 
-        val minAngle = withAngles.minOf { it.second }
-        val maxAngle = withAngles.maxOf { it.second }
-        val span = (maxAngle - minAngle).coerceAtLeast(0.001)
-
+        val fullTurn = 2.0 * Math.PI
         return (0 until wanted).mapNotNull { bin ->
-            val lo = minAngle + span * bin / wanted.toDouble()
-            val hi = minAngle + span * (bin + 1) / wanted.toDouble()
+            val lo = fullTurn * bin / wanted.toDouble()
+            val hi = fullTurn * (bin + 1) / wanted.toDouble()
+
             withAngles
                 .asSequence()
-                .filter { (_, angle) ->
-                    if (bin == wanted - 1) angle in lo..hi else angle >= lo && angle < hi
+                .filter { (_, angle, _) ->
+                    if (bin == wanted - 1) angle >= lo && angle <= hi
+                    else angle >= lo && angle < hi
                 }
-                .maxByOrNull { it.first.blurScore }
+                .maxByOrNull { (candidate, _, _) -> candidate.blurScore }
                 ?.first
         }.sortedBy { it.timeMs }
     }
