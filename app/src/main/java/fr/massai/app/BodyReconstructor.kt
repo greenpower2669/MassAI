@@ -33,7 +33,10 @@ data class BodyReconstruction(
     val halfExtentM: Double,
     val angularCoverageDeg: Double,
     val anglesMeasured: Boolean,
-    val meanBlurScore: Double
+    val meanBlurScore: Double,
+    val removedIslandVoxels: Int,
+    val componentsBeforeCleanup: Int,
+    val componentsAfterCleanup: Int
 )
 
 class BodyReconstructor : Closeable {
@@ -215,11 +218,27 @@ class BodyReconstructor : Closeable {
             )
         }
 
+        progress("Nettoyage des artefacts", 0, 1)
+
+        // Nettoyage conservateur avant réparation : on retire uniquement les
+        // petites composantes déconnectées. Les gros morceaux séparés restent
+        // présents afin de ne pas supprimer un membre mal raccordé.
+        val rawCleanup = VoxelPostProcessor.cleanup(raw, nx, ny, nz)
+        val cleanedRaw = rawCleanup.occupancy
+
         progress("Réparation voxel", 0, 1)
-        val repaired = repair(raw, nx, ny, nz)
+        val repaired = repair(cleanedRaw, nx, ny, nz)
+
+        // La réparation peut elle-même créer quelques petits îlots ; deuxième
+        // passe légère avant le calcul final.
+        val repairedCleanup = VoxelPostProcessor.cleanup(repaired, nx, ny, nz)
+        val finalRepaired = repairedCleanup.occupancy
+
         val rawCount = raw.count { it }
-        val repairedCount = repaired.count { it }
-        val changedCount = raw.indices.count { raw[it] != repaired[it] }
+        val repairedCount = finalRepaired.count { it }
+        val changedCount = raw.indices.count { raw[it] != finalRepaired[it] }
+        val removedIslandVoxels =
+            rawCleanup.removedVoxels + repairedCleanup.removedVoxels
 
         val voxelVolume = dx * dy * dz
         val rawVolume = rawCount * voxelVolume
@@ -232,8 +251,10 @@ class BodyReconstructor : Closeable {
 
         progress("Préparation du modèle 3D", 0, 1)
         val rawSurface = surfacePoints(raw, nx, ny, nz, halfExtent, bodyHeightM)
-        val repairedSurface = surfacePoints(repaired, nx, ny, nz, halfExtent, bodyHeightM)
-        val corrections = correctionPoints(raw, repaired, nx, ny, nz, halfExtent, bodyHeightM)
+        val repairedSurface =
+            surfacePoints(finalRepaired, nx, ny, nz, halfExtent, bodyHeightM)
+        val corrections =
+            correctionPoints(raw, finalRepaired, nx, ny, nz, halfExtent, bodyHeightM)
 
         return BodyReconstruction(
             rawSurface = rawSurface,
@@ -254,7 +275,10 @@ class BodyReconstructor : Closeable {
             halfExtentM = halfExtent,
             angularCoverageDeg = angularCoverageDeg,
             anglesMeasured = anglesMeasured,
-            meanBlurScore = frames.map { it.blurScore }.average()
+            meanBlurScore = frames.map { it.blurScore }.average(),
+            removedIslandVoxels = removedIslandVoxels,
+            componentsBeforeCleanup = rawCleanup.componentsBefore,
+            componentsAfterCleanup = repairedCleanup.componentsAfter
         )
     }
 
