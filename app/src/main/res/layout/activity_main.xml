@@ -1,11 +1,173 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
-<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="MassAI" android:textSize="32sp" android:textStyle="bold" />
-<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Photogrammétrie corporelle — POC" android:textSize="16sp" android:layout_marginBottom="24dp" />
-<EditText android:id="@+id/heightInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Taille (cm)" android:inputType="numberDecimal" />
-<EditText android:id="@+id/weightInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Poids (kg)" android:inputType="numberDecimal" />
-<Button android:id="@+id/captureButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Filmer le scan" />
-<Button android:id="@+id/importButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Importer une vidéo" />
-<TextView android:id="@+id/statusText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Aucun scan chargé" android:paddingTop="20dp" />
-</LinearLayout></ScrollView>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="MassAI"
+            android:textSize="34sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:text="Photogrammétrie corporelle — POC v0.2"
+            android:textSize="16sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="MESURES DE RÉFÉRENCE"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/heightInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Taille (cm)"
+            android:importantForAutofill="no"
+            android:inputType="numberDecimal" />
+
+        <EditText
+            android:id="@+id/weightInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Poids (kg)"
+            android:importantForAutofill="no"
+            android:inputType="numberDecimal" />
+
+        <Button
+            android:id="@+id/captureButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="14dp"
+            android:text="FILMER LE SCAN" />
+
+        <Button
+            android:id="@+id/importButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="4dp"
+            android:text="IMPORTER UNE VIDÉO" />
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="Aucun scan chargé"
+            android:textSize="16sp" />
+
+        <Button
+            android:id="@+id/analysisButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="14dp"
+            android:enabled="false"
+            android:text="ANALYSER LE SCAN" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="26dp"
+            android:text="MODÈLE 3D"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <FrameLayout
+            android:id="@+id/modelPanel"
+            android:layout_width="match_parent"
+            android:layout_height="250dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/model_panel"
+            android:contentDescription="Zone d'affichage du modèle 3D">
+
+            <TextView
+                android:id="@+id/modelStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:padding="24dp"
+                android:text="Aucun maillage 3D généré\nLa reconstruction s'affichera ici."
+                android:textAlignment="center"
+                android:textColor="@android:color/white"
+                android:textSize="18sp" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/rawMeshButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:enabled="false"
+                android:text="BRUT" />
+
+            <Button
+                android:id="@+id/repairedMeshButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:enabled="false"
+                android:text="RÉPARÉ" />
+
+            <Button
+                android:id="@+id/holesButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:enabled="false"
+                android:text="TROUS" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="PIPELINE"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/pipelineText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:lineSpacingExtra="4dp"
+            android:text="○ Extraction des images\n○ Sélection qualité\n○ Segmentation silhouette\n○ Reconstruction 3D\n○ Sol et pieds\n○ Réparation / watertight\n○ Mise à l'échelle\n○ Volume et densité"
+            android:textSize="16sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="RÉSULTATS"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/metricsText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:layout_marginTop="8dp"
+            android:lineSpacingExtra="4dp"
+            android:text="Volume : —\nDensité : —\nQualité : —"
+            android:textSize="17sp" />
+
+    </LinearLayout>
+</ScrollView>
