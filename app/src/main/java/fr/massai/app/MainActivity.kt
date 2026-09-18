@@ -1,13 +1,16 @@
 package fr.massai.app
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
+import android.widget.RadioGroup
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -18,17 +21,25 @@ import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
 
+    private data class Measurements(
+        val heightM: Double,
+        val weightKg: Double?
+    )
+
     private lateinit var heightInput: EditText
     private lateinit var weightInput: EditText
     private lateinit var statusText: TextView
     private lateinit var modelStatusText: TextView
     private lateinit var pipelineText: TextView
     private lateinit var metricsText: TextView
+    private lateinit var methodText: TextView
+    private lateinit var modeHelpText: TextView
     private lateinit var analysisButton: Button
     private lateinit var rawButton: Button
     private lateinit var repairedButton: Button
     private lateinit var correctionsButton: Button
     private lateinit var bodyModelView: BodyModelView
+    private lateinit var segmentationModeGroup: RadioGroup
 
     private var selectedVideo: Uri? = null
     private var selectedMetadataFile: File? = null
@@ -78,11 +89,19 @@ class MainActivity : AppCompatActivity() {
         modelStatusText = findViewById(R.id.modelStatusText)
         pipelineText = findViewById(R.id.pipelineText)
         metricsText = findViewById(R.id.metricsText)
+        methodText = findViewById(R.id.methodText)
+        modeHelpText = findViewById(R.id.modeHelpText)
         analysisButton = findViewById(R.id.analysisButton)
         rawButton = findViewById(R.id.rawMeshButton)
         repairedButton = findViewById(R.id.repairedMeshButton)
         correctionsButton = findViewById(R.id.holesButton)
         bodyModelView = findViewById(R.id.bodyModelView)
+        segmentationModeGroup = findViewById(R.id.segmentationModeGroup)
+
+        segmentationModeGroup.setOnCheckedChangeListener { _, _ ->
+            updateModeUi()
+        }
+        updateModeUi()
 
         findViewById<Button>(R.id.captureButton).setOnClickListener {
             scanLauncher.launch(Intent(this, ScanActivity::class.java))
@@ -93,9 +112,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         analysisButton.setOnClickListener {
+            hideKeyboard()
             val uri = selectedVideo ?: return@setOnClickListener
-            val measurements = measurementsOrNull() ?: return@setOnClickListener
-            reconstruct(uri, measurements.first, measurements.second)
+            val mode = currentMode()
+            val measurements = measurementsOrNull(mode) ?: return@setOnClickListener
+            reconstruct(
+                uri = uri,
+                heightM = measurements.heightM,
+                weightKg = measurements.weightKg,
+                mode = mode
+            )
         }
 
         rawButton.setOnClickListener {
@@ -106,6 +132,40 @@ class MainActivity : AppCompatActivity() {
         }
         correctionsButton.setOnClickListener {
             bodyModelView.setMode(BodyModelView.RenderMode.CORRECTIONS)
+        }
+    }
+
+    private fun currentMode(): SegmentationMode {
+        return if (segmentationModeGroup.checkedRadioButtonId == R.id.modeObjectRadio) {
+            SegmentationMode.OBJECT
+        } else {
+            SegmentationMode.HUMAN
+        }
+    }
+
+    private fun updateModeUi() {
+        when (currentMode()) {
+            SegmentationMode.HUMAN -> {
+                heightInput.hint = "Taille (cm)"
+                weightInput.hint = "Poids (kg)"
+                modeHelpText.text =
+                    "Humain : segmentation personne, adaptée au futur squelette anatomique."
+                analysisButton.text = "RECONSTRUIRE LE CORPS 3D"
+                methodText.text =
+                    "Mode humain : segmentation personne puis visual hull multi-vues. " +
+                        "Les scans filmés utilisent les angles mesurés du téléphone."
+            }
+
+            SegmentationMode.OBJECT -> {
+                heightInput.hint = "Hauteur objet (cm)"
+                weightInput.hint = "Poids objet (kg, facultatif)"
+                modeHelpText.text =
+                    "Objet / humanoïde : segmentation générique du sujet, sans supposer un humain."
+                analysisButton.text = "RECONSTRUIRE LE SUJET 3D"
+                methodText.text =
+                    "Mode objet test : segmentation générique du premier plan puis visual hull. " +
+                        "Le modèle ML peut être téléchargé par Google Play Services au premier usage."
+            }
         }
     }
 
@@ -130,7 +190,7 @@ class MainActivity : AppCompatActivity() {
         statusText.text = "$sourceLabel ✓\n$angleInfo"
         modelStatusText.visibility = View.VISIBLE
         modelStatusText.text =
-            "Vidéo prête ✓\nRenseignez taille et poids puis lancez la reconstruction."
+            "Vidéo prête ✓\nRenseignez les mesures puis lancez la reconstruction."
 
         bodyModelView.clear()
         setModelButtonsEnabled(false)
@@ -148,24 +208,59 @@ class MainActivity : AppCompatActivity() {
             "○ Volume et densité"
     }
 
-    private fun measurementsOrNull(): Pair<Double, Double>? {
+    private fun measurementsOrNull(mode: SegmentationMode): Measurements? {
         val heightCm = heightInput.text.toString().replace(',', '.').toDoubleOrNull()
-        val weightKg = weightInput.text.toString().replace(',', '.').toDoubleOrNull()
+        val weightText = weightInput.text.toString().trim()
+        val weightKg = weightText.replace(',', '.').toDoubleOrNull()
 
-        if (heightCm == null || heightCm !in 100.0..250.0) {
-            heightInput.error = "Taille attendue entre 100 et 250 cm"
+        val validHeightRange = when (mode) {
+            SegmentationMode.HUMAN -> 100.0..250.0
+            SegmentationMode.OBJECT -> 5.0..250.0
+        }
+
+        if (heightCm == null || heightCm !in validHeightRange) {
+            heightInput.error = when (mode) {
+                SegmentationMode.HUMAN -> "Taille attendue entre 100 et 250 cm"
+                SegmentationMode.OBJECT -> "Hauteur attendue entre 5 et 250 cm"
+            }
             heightInput.requestFocus()
             return null
         }
-        if (weightKg == null || weightKg !in 20.0..350.0) {
-            weightInput.error = "Poids attendu entre 20 et 350 kg"
-            weightInput.requestFocus()
-            return null
+
+        when (mode) {
+            SegmentationMode.HUMAN -> {
+                if (weightKg == null || weightKg !in 20.0..350.0) {
+                    weightInput.error = "Poids attendu entre 20 et 350 kg"
+                    weightInput.requestFocus()
+                    return null
+                }
+            }
+
+            SegmentationMode.OBJECT -> {
+                if (weightText.isNotEmpty() && (weightKg == null || weightKg !in 0.01..350.0)) {
+                    weightInput.error = "Poids objet facultatif, en kg"
+                    weightInput.requestFocus()
+                    return null
+                }
+            }
         }
-        return Pair(heightCm / 100.0, weightKg)
+
+        return Measurements(
+            heightM = heightCm / 100.0,
+            weightKg = if (mode == SegmentationMode.OBJECT && weightText.isEmpty()) {
+                null
+            } else {
+                weightKg
+            }
+        )
     }
 
-    private fun reconstruct(uri: Uri, heightM: Double, weightKg: Double) {
+    private fun reconstruct(
+        uri: Uri,
+        heightM: Double,
+        weightKg: Double?,
+        mode: SegmentationMode
+    ) {
         analysisButton.isEnabled = false
         setModelButtonsEnabled(false)
         modelStatusText.visibility = View.VISIBLE
@@ -247,12 +342,28 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val result = BodyReconstructor().use { reconstructor ->
-                    reconstructor.reconstruct(frames, heightM) { stage, current, total ->
+                    reconstructor.reconstruct(
+                        frames = frames,
+                        bodyHeightM = heightM,
+                        mode = mode
+                    ) { stage, current, total ->
                         runOnUiThread {
                             val progressText = if (total > 1) " $current/$total" else ""
                             statusText.text = "$stage$progressText…"
 
                             when (stage) {
+                                "Préparation segmentation objet" -> {
+                                    pipelineText.text =
+                                        "✓ Extraction des candidates (${candidates.size})\n" +
+                                        "✓ Sélection qualité (${frames.size} vues)\n" +
+                                        "◉ Préparation du modèle objet…\n" +
+                                        "○ Segmentation silhouette\n" +
+                                        "○ Visual hull 3D\n" +
+                                        "○ Réparation voxel\n" +
+                                        "○ Mise à l'échelle\n" +
+                                        "○ Volume et densité"
+                                }
+
                                 "Segmentation silhouette" -> {
                                     pipelineText.text =
                                         "✓ Extraction des candidates (${candidates.size})\n" +
@@ -292,16 +403,27 @@ class MainActivity : AppCompatActivity() {
 
                 val liters = BodyMath.liters(result.repairedVolumeM3)
                 val rawLiters = BodyMath.liters(result.rawVolumeM3)
-                val kgPerLiter = BodyMath.densityKgPerLiter(
-                    weightKg,
-                    result.repairedVolumeM3
-                )
-                val kgPerM3 = BodyMath.densityKgPerM3(
-                    weightKg,
-                    result.repairedVolumeM3
-                )
                 val repairPct = result.repairFraction * 100.0
                 val angleLabel = if (result.anglesMeasured) "mesurée" else "estimée"
+
+                val densityLine = if (weightKg != null) {
+                    val kgPerLiter = BodyMath.densityKgPerLiter(
+                        weightKg,
+                        result.repairedVolumeM3
+                    )
+                    val kgPerM3 = BodyMath.densityKgPerM3(
+                        weightKg,
+                        result.repairedVolumeM3
+                    )
+                    String.format(
+                        Locale.FRANCE,
+                        "Densité : %.3f kg/L  •  %.0f kg/m³",
+                        kgPerLiter,
+                        kgPerM3
+                    )
+                } else {
+                    "Densité : — (poids non renseigné)"
+                }
 
                 runOnUiThread {
                     bodyModelView.setReconstruction(result)
@@ -315,29 +437,34 @@ class MainActivity : AppCompatActivity() {
                         "✓ Segmentation silhouette (${result.validViews} valides)\n" +
                         "✓ Visual hull 3D\n" +
                         "✓ Réparation voxel\n" +
-                        "✓ Mise à l'échelle par la taille\n" +
-                        "✓ Volume et densité"
+                        "✓ Mise à l'échelle par la hauteur\n" +
+                        "✓ Volume" +
+                        if (weightKg != null) " et densité" else ""
 
                     metricsText.text = String.format(
                         Locale.FRANCE,
                         "Volume réparé : %.1f L\n" +
                             "Volume brut voxel : %.1f L\n" +
-                            "Densité : %.3f kg/L  •  %.0f kg/m³\n" +
+                            "%s\n" +
                             "Qualité technique : %d/100\n" +
                             "Couverture : %.0f° (%s)\n" +
                             "Corrections : %.2f %% des voxels",
                         liters,
                         rawLiters,
-                        kgPerLiter,
-                        kgPerM3,
+                        densityLine,
                         result.quality,
                         result.angularCoverageDeg,
                         angleLabel,
                         repairPct
                     )
 
+                    val modeName = if (mode == SegmentationMode.OBJECT) {
+                        "objet"
+                    } else {
+                        "humain"
+                    }
                     statusText.text =
-                        "Reconstruction terminée ✓ — " +
+                        "Reconstruction $modeName terminée ✓ — " +
                             "${result.validViews}/${result.totalViews} vues exploitables."
                     analysisButton.isEnabled = true
                 }
@@ -415,5 +542,13 @@ class MainActivity : AppCompatActivity() {
         rawButton.isEnabled = enabled
         repairedButton.isEnabled = enabled
         correctionsButton.isEnabled = enabled
+    }
+
+    private fun hideKeyboard() {
+        currentFocus?.let { view ->
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.hideSoftInputFromWindow(view.windowToken, 0)
+            view.clearFocus()
+        }
     }
 }
