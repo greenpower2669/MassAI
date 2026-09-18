@@ -21,7 +21,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="18dp"
-            android:text="Reconstruction 3D — POC v0.7"
+            android:text="Reconstruction 3D — POC v0.8"
             android:textSize="16sp" />
 
         <TextView
@@ -81,6 +81,41 @@
             android:hint="Poids (kg)"
             android:importantForAutofill="no"
             android:inputType="numberDecimal" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="CAPTURE"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/captureProfileSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:contentDescription="Nombre de passages de capture" />
+
+        <EditText
+            android:id="@+id/manualLevelsInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Nombre de passages (1 à 5)"
+            android:importantForAutofill="no"
+            android:inputType="number"
+            android:visibility="gone" />
+
+        <Spinner
+            android:id="@+id/cameraPreferenceSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:contentDescription="Choix de la caméra" />
+
+        <TextView
+            android:id="@+id/captureHelpText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Standard : 2 passages. Caméra Auto par défaut."
+            android:textSize="14sp" />
 
         <Button
             android:id="@+id/captureButton"
@@ -165,7 +200,29 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:enabled="false"
-                android:text="RÉPARÉ" />
+                android:text="POINTS" />
+
+            <Button
+                android:id="@+id/meshButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:enabled="false"
+                android:text="MESH" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/wireButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:enabled="false"
+                android:text="FIL" />
 
             <Button
                 android:id="@+id/holesButton"
@@ -176,11 +233,41 @@
                 android:text="CORRECTIONS" />
         </LinearLayout>
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/saveModelButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:enabled="false"
+                android:text="SAUVER .MASSAI" />
+
+            <Button
+                android:id="@+id/loadModelButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="OUVRIR" />
+
+            <Button
+                android:id="@+id/exportObjButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:enabled="false"
+                android:text="EXPORT OBJ" />
+        </LinearLayout>
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:paddingTop="8dp"
-            android:text="Glissez sur le modèle pour le tourner. Pincez pour zoomer."
+            android:text="Glissez pour tourner, pincez pour zoomer. MESH = surface triangulée ; FIL = maillage filaire."
             android:textSize="14sp" />
 
         <TextView
@@ -223,7 +310,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
-            android:text="Méthode POC : enveloppe visuelle 3D à partir de silhouettes multi-vues. Les scans filmés utilisent désormais les angles mesurés du téléphone ; les vidéos importées utilisent encore une estimation uniforme."
+            android:text="Méthode POC : visual hull multi-vues + nettoyage voxel + mesh triangulé. Les modèles peuvent être sauvegardés en .massai et exportés en OBJ. L’ultra grand-angle est utilisé seulement lorsqu’il est exposé par CameraX."
             android:textSize="13sp" />
 
     </LinearLayout>
