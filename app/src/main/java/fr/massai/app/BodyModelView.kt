@@ -86,10 +86,10 @@ class BodyModelView @JvmOverloads constructor(
         val scale = min(fitX, fitY) * zoom
         val pointRadius = (1.7f * zoom).coerceIn(1.2f, 3.4f)
 
-        val cyaw = cos(yaw)
-        val syaw = sin(yaw)
-        val cpitch = cos(pitch)
-        val spitch = sin(pitch)
+        val cyaw = cos(yaw.toDouble()).toFloat()
+        val syaw = sin(yaw.toDouble()).toFloat()
+        val cpitch = cos(pitch.toDouble()).toFloat()
+        val spitch = sin(pitch.toDouble()).toFloat()
         val halfHeight = model.heightM.toFloat() * 0.5f
         val perspectiveBase = model.halfExtentM.toFloat().coerceAtLeast(0.25f)
 
