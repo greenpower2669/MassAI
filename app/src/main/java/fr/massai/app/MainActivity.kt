@@ -8,9 +8,11 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.view.inputmethod.InputMethodManager
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.RadioGroup
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -28,6 +30,10 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var heightInput: EditText
     private lateinit var weightInput: EditText
+    private lateinit var manualLevelsInput: EditText
+    private lateinit var captureProfileSpinner: Spinner
+    private lateinit var cameraPreferenceSpinner: Spinner
+    private lateinit var captureHelpText: TextView
     private lateinit var statusText: TextView
     private lateinit var modelStatusText: TextView
     private lateinit var pipelineText: TextView
@@ -37,7 +43,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var analysisButton: Button
     private lateinit var rawButton: Button
     private lateinit var repairedButton: Button
+    private lateinit var meshButton: Button
+    private lateinit var wireButton: Button
     private lateinit var correctionsButton: Button
+    private lateinit var saveModelButton: Button
+    private lateinit var exportObjButton: Button
     private lateinit var bodyModelView: BodyModelView
     private lateinit var segmentationModeGroup: RadioGroup
 
@@ -79,12 +89,84 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+    private val saveModelLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.CreateDocument("application/octet-stream")
+        ) { uri ->
+            val model = bodyModelView.getReconstruction()
+            if (uri != null && model != null) {
+                Thread {
+                    try {
+                        contentResolver.openOutputStream(uri, "w")?.use { stream ->
+                            ModelArchive.write(model, stream)
+                        } ?: error("Impossible d'ouvrir le fichier de destination.")
+                        runOnUiThread {
+                            statusText.text = "Modèle .massai sauvegardé ✓"
+                        }
+                    } catch (e: Exception) {
+                        runOnUiThread {
+                            statusText.text =
+                                "Échec de sauvegarde : ${e.message ?: "erreur inconnue"}"
+                        }
+                    }
+                }.start()
+            }
+        }
+
+    private val exportObjLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+            val model = bodyModelView.getReconstruction()
+            if (uri != null && model != null) {
+                Thread {
+                    try {
+                        contentResolver.openOutputStream(uri, "w")?.use { stream ->
+                            ModelArchive.writeObj(model.repairedMesh, stream)
+                        } ?: error("Impossible d'ouvrir le fichier OBJ.")
+                        runOnUiThread {
+                            statusText.text = "Mesh OBJ exporté ✓"
+                        }
+                    } catch (e: Exception) {
+                        runOnUiThread {
+                            statusText.text =
+                                "Échec export OBJ : ${e.message ?: "erreur inconnue"}"
+                        }
+                    }
+                }.start()
+            }
+        }
+
+    private val loadModelLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) {
+                Thread {
+                    try {
+                        val model = contentResolver.openInputStream(uri)?.use {
+                            ModelArchive.read(it)
+                        } ?: error("Impossible d'ouvrir le modèle.")
+
+                        runOnUiThread {
+                            showLoadedModel(model)
+                        }
+                    } catch (e: Exception) {
+                        runOnUiThread {
+                            statusText.text =
+                                "Impossible d'ouvrir le modèle : ${e.message ?: "erreur inconnue"}"
+                        }
+                    }
+                }.start()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         heightInput = findViewById(R.id.heightInput)
         weightInput = findViewById(R.id.weightInput)
+        manualLevelsInput = findViewById(R.id.manualLevelsInput)
+        captureProfileSpinner = findViewById(R.id.captureProfileSpinner)
+        cameraPreferenceSpinner = findViewById(R.id.cameraPreferenceSpinner)
+        captureHelpText = findViewById(R.id.captureHelpText)
         statusText = findViewById(R.id.statusText)
         modelStatusText = findViewById(R.id.modelStatusText)
         pipelineText = findViewById(R.id.pipelineText)
@@ -94,9 +176,15 @@ class MainActivity : AppCompatActivity() {
         analysisButton = findViewById(R.id.analysisButton)
         rawButton = findViewById(R.id.rawMeshButton)
         repairedButton = findViewById(R.id.repairedMeshButton)
+        meshButton = findViewById(R.id.meshButton)
+        wireButton = findViewById(R.id.wireButton)
         correctionsButton = findViewById(R.id.holesButton)
+        saveModelButton = findViewById(R.id.saveModelButton)
+        exportObjButton = findViewById(R.id.exportObjButton)
         bodyModelView = findViewById(R.id.bodyModelView)
         segmentationModeGroup = findViewById(R.id.segmentationModeGroup)
+
+        setupCaptureOptions()
 
         segmentationModeGroup.setOnCheckedChangeListener { _, _ ->
             updateModeUi()
@@ -104,11 +192,28 @@ class MainActivity : AppCompatActivity() {
         updateModeUi()
 
         findViewById<Button>(R.id.captureButton).setOnClickListener {
-            scanLauncher.launch(Intent(this, ScanActivity::class.java))
+            hideKeyboard()
+            val levels = selectedTargetLevels() ?: return@setOnClickListener
+            val cameraPreference = CameraPreference.entries[
+                cameraPreferenceSpinner.selectedItemPosition
+            ]
+
+            scanLauncher.launch(
+                Intent(this, ScanActivity::class.java)
+                    .putExtra(ScanActivity.EXTRA_TARGET_LEVELS, levels)
+                    .putExtra(
+                        ScanActivity.EXTRA_CAMERA_PREFERENCE,
+                        cameraPreference.name
+                    )
+            )
         }
 
         findViewById<Button>(R.id.importButton).setOnClickListener {
             importVideoLauncher.launch(arrayOf("video/*"))
+        }
+
+        findViewById<Button>(R.id.loadModelButton).setOnClickListener {
+            loadModelLauncher.launch(arrayOf("application/octet-stream", "*/*"))
         }
 
         analysisButton.setOnClickListener {
@@ -130,9 +235,107 @@ class MainActivity : AppCompatActivity() {
         repairedButton.setOnClickListener {
             bodyModelView.setMode(BodyModelView.RenderMode.REPAIRED)
         }
+        meshButton.setOnClickListener {
+            bodyModelView.setMode(BodyModelView.RenderMode.MESH)
+        }
+        wireButton.setOnClickListener {
+            bodyModelView.setMode(BodyModelView.RenderMode.WIREFRAME)
+        }
         correctionsButton.setOnClickListener {
             bodyModelView.setMode(BodyModelView.RenderMode.CORRECTIONS)
         }
+        saveModelButton.setOnClickListener {
+            if (bodyModelView.getReconstruction() != null) {
+                saveModelLauncher.launch("MassAI_modele.massai")
+            }
+        }
+        exportObjButton.setOnClickListener {
+            if (bodyModelView.getReconstruction() != null) {
+                exportObjLauncher.launch("MassAI_mesh.obj")
+            }
+        }
+    }
+
+    private fun setupCaptureOptions() {
+        captureProfileSpinner.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            CaptureProfile.entries.map { it.label }
+        ).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        captureProfileSpinner.setSelection(CaptureProfile.STANDARD.ordinal)
+
+        cameraPreferenceSpinner.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            CameraPreference.entries.map { it.label }
+        ).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        cameraPreferenceSpinner.setSelection(CameraPreference.AUTO.ordinal)
+
+        captureProfileSpinner.onItemSelectedListener =
+            object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(
+                    parent: android.widget.AdapterView<*>?,
+                    view: View?,
+                    position: Int,
+                    id: Long
+                ) {
+                    val profile = CaptureProfile.entries[position]
+                    manualLevelsInput.visibility =
+                        if (profile == CaptureProfile.MANUAL) View.VISIBLE else View.GONE
+                    updateCaptureHelp()
+                }
+
+                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+            }
+
+        cameraPreferenceSpinner.onItemSelectedListener =
+            object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(
+                    parent: android.widget.AdapterView<*>?,
+                    view: View?,
+                    position: Int,
+                    id: Long
+                ) {
+                    updateCaptureHelp()
+                }
+
+                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+            }
+
+        updateCaptureHelp()
+    }
+
+    private fun updateCaptureHelp() {
+        val profile = CaptureProfile.entries[
+            captureProfileSpinner.selectedItemPosition.coerceAtLeast(0)
+        ]
+        val camera = CameraPreference.entries[
+            cameraPreferenceSpinner.selectedItemPosition.coerceAtLeast(0)
+        ]
+
+        captureHelpText.text =
+            "${profile.label} • ${camera.label}. " +
+                "L'ultra grand-angle est utilisé seulement s'il est exposé par CameraX."
+    }
+
+    private fun selectedTargetLevels(): Int? {
+        val profile = CaptureProfile.entries[
+            captureProfileSpinner.selectedItemPosition.coerceAtLeast(0)
+        ]
+
+        if (profile != CaptureProfile.MANUAL) return profile.defaultLevels
+
+        val levels = manualLevelsInput.text.toString().toIntOrNull()
+        if (levels == null || levels !in 1..5) {
+            manualLevelsInput.error = "Choisissez entre 1 et 5 passages"
+            manualLevelsInput.requestFocus()
+            return null
+        }
+        return levels
     }
 
     private fun currentMode(): SegmentationMode {
@@ -152,8 +355,7 @@ class MainActivity : AppCompatActivity() {
                     "Humain : segmentation personne, adaptée au futur squelette anatomique."
                 analysisButton.text = "RECONSTRUIRE LE CORPS 3D"
                 methodText.text =
-                    "Mode humain : segmentation personne puis visual hull multi-vues. " +
-                        "Les scans filmés utilisent les angles mesurés du téléphone."
+                    "Mode humain : silhouettes multi-vues, visual hull, nettoyage puis mesh triangulé."
             }
 
             SegmentationMode.OBJECT -> {
@@ -163,8 +365,7 @@ class MainActivity : AppCompatActivity() {
                     "Objet / humanoïde : segmentation générique du sujet, sans supposer un humain."
                 analysisButton.text = "RECONSTRUIRE LE SUJET 3D"
                 methodText.text =
-                    "Mode objet test : segmentation générique du premier plan puis visual hull. " +
-                        "Le modèle ML peut être téléchargé par Google Play Services au premier usage."
+                    "Mode objet : segmentation générique puis visual hull et mesh triangulé."
             }
         }
     }
@@ -185,7 +386,11 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     ""
                 }
-                "Angles téléphone : ${metadata.coverageDegrees.roundToInt()}° mesurés$levelInfo"
+                val cameraInfo = metadata.cameraLabel
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { " • $it" }
+                    ?: ""
+                "Angles téléphone : ${metadata.coverageDegrees.roundToInt()}° mesurés$levelInfo$cameraInfo"
             }
             sourceLabel.startsWith("Vidéo importée") ->
                 "Angles : estimation uniforme (vidéo importée)"
@@ -209,8 +414,8 @@ class MainActivity : AppCompatActivity() {
             "○ Netteté / redondance / angles\n" +
             "○ Segmentation silhouette\n" +
             "○ Visual hull 3D\n" +
-            "○ Réparation voxel\n" +
-            "○ Mise à l'échelle\n" +
+            "○ Nettoyage voxel\n" +
+            "○ Mesh triangulé\n" +
             "○ Volume et densité"
     }
 
@@ -277,8 +482,8 @@ class MainActivity : AppCompatActivity() {
             "○ Netteté / redondance / angles\n" +
             "○ Segmentation silhouette\n" +
             "○ Visual hull 3D\n" +
-            "○ Réparation voxel\n" +
-            "○ Mise à l'échelle\n" +
+            "○ Nettoyage voxel\n" +
+            "○ Mesh triangulé\n" +
             "○ Volume et densité"
 
         Thread {
@@ -298,8 +503,16 @@ class MainActivity : AppCompatActivity() {
 
                 val multiLevelScan =
                     metadata?.sensorAvailable == true && metadata.targetLevels > 1
-                val candidateTarget = if (multiLevelScan) 72 else 48
-                val wantedViews = if (multiLevelScan) 24 else 20
+                val candidateTarget = when {
+                    metadata?.targetLevels != null && metadata.targetLevels >= 4 -> 96
+                    multiLevelScan -> 72
+                    else -> 48
+                }
+                val wantedViews = when {
+                    metadata?.targetLevels != null && metadata.targetLevels >= 4 -> 28
+                    multiLevelScan -> 24
+                    else -> 20
+                }
 
                 val candidates = extractCandidates(uri, candidateTarget)
                 if (candidates.size < 12) {
@@ -309,14 +522,6 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 runOnUiThread {
-                    pipelineText.text =
-                        "✓ Extraction des candidates (${candidates.size})\n" +
-                        "◉ Netteté / redondance / angles…\n" +
-                        "○ Segmentation silhouette\n" +
-                        "○ Visual hull 3D\n" +
-                        "○ Réparation voxel\n" +
-                        "○ Mise à l'échelle\n" +
-                        "○ Volume et densité"
                     statusText.text = "Sélection des meilleures vues…"
                 }
 
@@ -341,17 +546,6 @@ class MainActivity : AppCompatActivity() {
                     )
                 }
 
-                runOnUiThread {
-                    pipelineText.text =
-                        "✓ Extraction des candidates (${candidates.size})\n" +
-                        "✓ Sélection qualité (${frames.size} vues)\n" +
-                        "◉ Segmentation silhouette…\n" +
-                        "○ Visual hull 3D\n" +
-                        "○ Réparation voxel\n" +
-                        "○ Mise à l'échelle\n" +
-                        "○ Volume et densité"
-                }
-
                 val result = BodyReconstructor().use { reconstructor ->
                     reconstructor.reconstruct(
                         frames = frames,
@@ -362,64 +556,14 @@ class MainActivity : AppCompatActivity() {
                             val progressText = if (total > 1) " $current/$total" else ""
                             statusText.text = "$stage$progressText…"
 
-                            when (stage) {
-                                "Préparation segmentation objet" -> {
-                                    pipelineText.text =
-                                        "✓ Extraction des candidates (${candidates.size})\n" +
-                                        "✓ Sélection qualité (${frames.size} vues)\n" +
-                                        "◉ Préparation du modèle objet…\n" +
-                                        "○ Segmentation silhouette\n" +
-                                        "○ Visual hull 3D\n" +
-                                        "○ Réparation voxel\n" +
-                                        "○ Mise à l'échelle\n" +
-                                        "○ Volume et densité"
-                                }
-
-                                "Segmentation silhouette" -> {
-                                    pipelineText.text =
-                                        "✓ Extraction des candidates (${candidates.size})\n" +
-                                        "✓ Sélection qualité (${frames.size} vues)\n" +
-                                        "◉ Segmentation silhouette $current/$total\n" +
-                                        "○ Visual hull 3D\n" +
-                                        "○ Réparation voxel\n" +
-                                        "○ Mise à l'échelle\n" +
-                                        "○ Volume et densité"
-                                }
-
-                                "Construction du visual hull" -> {
-                                    pipelineText.text =
-                                        "✓ Extraction des candidates (${candidates.size})\n" +
-                                        "✓ Sélection qualité (${frames.size} vues)\n" +
-                                        "✓ Segmentation silhouette\n" +
-                                        "◉ Visual hull 3D $current/$total\n" +
-                                        "○ Réparation voxel\n" +
-                                        "○ Mise à l'échelle\n" +
-                                        "○ Volume et densité"
-                                }
-
-                                "Nettoyage des artefacts" -> {
-                                    pipelineText.text =
-                                        "✓ Extraction des candidates (${candidates.size})\n" +
-                                        "✓ Sélection qualité (${frames.size} vues)\n" +
-                                        "✓ Segmentation silhouette\n" +
-                                        "✓ Visual hull 3D\n" +
-                                        "◉ Nettoyage des îlots…\n" +
-                                        "○ Réparation voxel\n" +
-                                        "○ Mise à l'échelle\n" +
-                                        "○ Volume et densité"
-                                }
-
-                                "Réparation voxel" -> {
-                                    pipelineText.text =
-                                        "✓ Extraction des candidates (${candidates.size})\n" +
-                                        "✓ Sélection qualité (${frames.size} vues)\n" +
-                                        "✓ Segmentation silhouette\n" +
-                                        "✓ Visual hull 3D\n" +
-                                        "✓ Nettoyage des îlots\n" +
-                                        "◉ Réparation voxel…\n" +
-                                        "○ Mise à l'échelle\n" +
-                                        "○ Volume et densité"
-                                }
+                            if (stage == "Génération du mesh") {
+                                pipelineText.text =
+                                    "✓ Extraction et sélection des vues\n" +
+                                    "✓ Segmentation silhouette\n" +
+                                    "✓ Visual hull 3D\n" +
+                                    "✓ Nettoyage voxel\n" +
+                                    "◉ Génération du mesh…\n" +
+                                    "○ Volume et densité"
                             }
                         }
                     }
@@ -453,16 +597,14 @@ class MainActivity : AppCompatActivity() {
                     bodyModelView.setReconstruction(result)
                     modelStatusText.visibility = View.GONE
                     setModelButtonsEnabled(true)
-                    repairedButton.performClick()
+                    meshButton.performClick()
 
                     pipelineText.text =
-                        "✓ Extraction des candidates (${candidates.size})\n" +
+                        "✓ Extraction candidates (${candidates.size})\n" +
                         "✓ Sélection qualité (${frames.size} vues)\n" +
-                        "✓ Segmentation silhouette (${result.validViews} valides)\n" +
-                        "✓ Visual hull 3D\n" +
-                        "✓ Nettoyage des îlots\n" +
-                        "✓ Réparation voxel\n" +
-                        "✓ Mise à l'échelle par la hauteur\n" +
+                        "✓ Segmentation (${result.validViews} valides)\n" +
+                        "✓ Visual hull + nettoyage\n" +
+                        "✓ Mesh triangulé (${result.repairedMesh.triangleCount} triangles)\n" +
                         "✓ Volume" +
                         if (weightKg != null) " et densité" else ""
 
@@ -471,15 +613,17 @@ class MainActivity : AppCompatActivity() {
                         "Volume réparé : %.1f L\n" +
                             "Volume brut voxel : %.1f L\n" +
                             "%s\n" +
+                            "Mesh : %d triangles\n" +
                             "Qualité technique : %d/100\n" +
                             "Couverture : %.0f° (%s)\n" +
-                            "Corrections : %.2f %% des voxels\n" +
+                            "Corrections : %.2f %%\n" +
                             "Artefacts supprimés : %d voxels\n" +
                             "Composantes : %d → %d\n" +
-                            "Niveaux de capture exploités : %d",
+                            "Niveaux exploités : %d",
                         liters,
                         rawLiters,
                         densityLine,
+                        result.repairedMesh.triangleCount,
                         result.quality,
                         result.angularCoverageDeg,
                         angleLabel,
@@ -497,7 +641,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     statusText.text =
                         "Reconstruction $modeName terminée ✓ — " +
-                            "${result.validViews}/${result.totalViews} vues exploitables."
+                            "${result.validViews}/${result.totalViews} vues."
                     analysisButton.isEnabled = true
                 }
             } catch (e: Exception) {
@@ -512,6 +656,39 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }.start()
+    }
+
+    private fun showLoadedModel(model: BodyReconstruction) {
+        selectedVideo = null
+        selectedMetadataFile = null
+        analysisButton.isEnabled = false
+
+        bodyModelView.setReconstruction(model)
+        modelStatusText.visibility = View.GONE
+        setModelButtonsEnabled(true)
+        meshButton.performClick()
+
+        metricsText.text = String.format(
+            Locale.FRANCE,
+            "Modèle sauvegardé chargé ✓\n" +
+                "Volume réparé : %.1f L\n" +
+                "Volume brut : %.1f L\n" +
+                "Mesh : %d triangles\n" +
+                "Qualité technique : %d/100\n" +
+                "Couverture : %.0f°",
+            BodyMath.liters(model.repairedVolumeM3),
+            BodyMath.liters(model.rawVolumeM3),
+            model.repairedMesh.triangleCount,
+            model.quality,
+            model.angularCoverageDeg
+        )
+
+        pipelineText.text =
+            "✓ Modèle .massai chargé\n" +
+            "✓ Surface et mesh disponibles\n" +
+            "✓ Export OBJ disponible"
+
+        statusText.text = "Modèle MassAI chargé ✓"
     }
 
     private fun extractCandidates(
@@ -573,7 +750,11 @@ class MainActivity : AppCompatActivity() {
     private fun setModelButtonsEnabled(enabled: Boolean) {
         rawButton.isEnabled = enabled
         repairedButton.isEnabled = enabled
+        meshButton.isEnabled = enabled
+        wireButton.isEnabled = enabled
         correctionsButton.isEnabled = enabled
+        saveModelButton.isEnabled = enabled
+        exportObjButton.isEnabled = enabled
     }
 
     private fun hideKeyboard() {
