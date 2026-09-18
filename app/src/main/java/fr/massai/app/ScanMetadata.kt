@@ -16,7 +16,10 @@ data class ScanMetadata(
     val samples: List<OrientationSample>,
     val sensorAvailable: Boolean,
     val targetLevels: Int = 1,
-    val completedLevels: Int = 0
+    val completedLevels: Int = 0,
+    val cameraPreference: String? = null,
+    val cameraId: String? = null,
+    val focalLengthMm: Float? = null
 ) {
     val levelsPresent: List<Int>
         get() = samples
@@ -26,6 +29,20 @@ data class ScanMetadata(
             .distinct()
             .sorted()
             .toList()
+
+    val cameraLabel: String?
+        get() {
+            val focal = focalLengthMm
+            return when {
+                focal != null && cameraPreference == CameraPreference.ULTRA_WIDE.name ->
+                    "ultra grand-angle %.1f mm".format(focal)
+                focal != null ->
+                    "caméra %.1f mm".format(focal)
+                !cameraPreference.isNullOrBlank() ->
+                    CameraPreference.fromName(cameraPreference).label
+                else -> null
+            }
+        }
 
     val coverageDegrees: Double
         get() {
@@ -84,11 +101,14 @@ data class ScanMetadata(
 
     fun writeTo(file: File) {
         val root = JSONObject()
-        root.put("version", 2)
+        root.put("version", 3)
         root.put("sensorAvailable", sensorAvailable)
         root.put("coverageDegrees", coverageDegrees)
         root.put("targetLevels", targetLevels)
         root.put("completedLevels", completedLevels)
+        root.put("cameraPreference", cameraPreference)
+        root.put("cameraId", cameraId)
+        focalLengthMm?.let { root.put("focalLengthMm", it.toDouble()) }
 
         val array = JSONArray()
         samples.forEach { sample ->
@@ -132,7 +152,16 @@ data class ScanMetadata(
                         samples.isNotEmpty()
                     ),
                     targetLevels = targetLevels,
-                    completedLevels = completedLevels
+                    completedLevels = completedLevels,
+                    cameraPreference = root.optString("cameraPreference", "")
+                        .takeIf { it.isNotBlank() },
+                    cameraId = root.optString("cameraId", "")
+                        .takeIf { it.isNotBlank() },
+                    focalLengthMm = if (root.has("focalLengthMm")) {
+                        root.optDouble("focalLengthMm").toFloat()
+                    } else {
+                        null
+                    }
                 )
             } catch (_: Exception) {
                 null
