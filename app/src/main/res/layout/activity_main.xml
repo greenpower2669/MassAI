@@ -21,7 +21,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="18dp"
-            android:text="Reconstruction 3D — POC v0.8"
+            android:text="Reconstruction 3D — v0.9 expérimental"
             android:textSize="16sp" />
 
         <TextView
@@ -137,6 +137,15 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:text="Aucun scan chargé"
+            android:textSize="16sp" />
+
+        <Switch
+            android:id="@+id/turboReconstructionSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:checked="true"
+            android:text="Reconstruction Turbo (désactiver pour comparer avec le moteur classique)"
             android:textSize="16sp" />
 
         <Button
