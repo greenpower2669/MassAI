@@ -74,6 +74,8 @@ class BodyReconstructor : Closeable {
         bodyHeightM: Double,
         mode: SegmentationMode = SegmentationMode.HUMAN,
         turbo: Boolean = false,
+        voxelDetail: Boolean = false,
+        supportRatio: Double = 0.86,
         progress: (stage: String, current: Int, total: Int) -> Unit = { _, _, _ -> }
     ): BodyReconstruction {
         when (mode) {
@@ -152,9 +154,9 @@ class BodyReconstructor : Closeable {
             .times(0.62)
             .coerceIn(bodyHeightM * 0.18, bodyHeightM * 0.60)
 
-        val nx = 48
-        val ny = 96
-        val nz = 48
+        val nx = if (turbo && voxelDetail) 72 else 48
+        val ny = if (turbo && voxelDetail) 144 else 96
+        val nz = if (turbo && voxelDetail) 72 else 48
         val raw = BooleanArray(nx * ny * nz)
 
         val dx = (2.0 * halfExtent) / nx.toDouble()
@@ -209,7 +211,7 @@ class BodyReconstructor : Closeable {
                     }
 
                     val accepted = if (turbo) {
-                        observed >= 3 && support >= ceil(observed * 0.86).toInt()
+                        observed >= 3 && support >= ceil(observed * supportRatio).toInt()
                     } else {
                         support >= requiredSupport
                     }
