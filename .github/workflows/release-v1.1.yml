@@ -1,0 +1,37 @@
+name: Publish MassAI v1.1.0 Options
+on:
+  push:
+    branches: [ "massai-v1.1-options" ]
+    paths:
+      - ".github/workflows/release-v1.1.yml"
+      - "app/**"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Test and build
+        run: gradle clean testDebugUnitTest :app:assembleRelease :app:bundleRelease --stacktrace
+      - name: Name outputs
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk MassAI-v1.1.0-release.apk
+          cp app/build/outputs/bundle/release/app-release.aab MassAI-v1.1.0-release.aab
+      - name: Publish experimental release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v1.1.0 \
+            MassAI-v1.1.0-release.apk MassAI-v1.1.0-release.aab \
+            --title "MassAI v1.1.0 Options (experimental)" \
+            --notes "Turbo: selectable 25/40/60 views per level, standard/detailed voxel grid and strict/tolerant support. Classic mode and OBJ retained. Geometry not scientifically validated." \
+            --target "$GITHUB_SHA" --prerelease
