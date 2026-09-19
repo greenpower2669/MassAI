@@ -1,0 +1,45 @@
+name: Build and publish MassAI v1.0.0 Turbo
+
+on:
+  push:
+    branches: [ "massai-v0.9-reconstruction" ]
+    paths:
+      - "app/**"
+      - ".github/workflows/release-v1.0.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Test and build APK and AAB
+        run: gradle clean testDebugUnitTest :app:assembleRelease :app:bundleRelease --stacktrace
+      - name: Rename outputs
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk MassAI-v1.0.0-release.apk
+          cp app/build/outputs/bundle/release/app-release.aab MassAI-v1.0.0-release.aab
+      - name: Publish release only after successful build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v1.0.0 \
+            MassAI-v1.0.0-release.apk \
+            MassAI-v1.0.0-release.aab \
+            --title "MassAI v1.0.0 Turbo (experimental)" \
+            --notes "Experimental default-on Turbo switch, multi-level frame selection and out-of-frame voxel voting. Classic comparison mode retained; geometry and volume not scientifically validated." \
+            --target "$GITHUB_SHA" \
+            --prerelease
