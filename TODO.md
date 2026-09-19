@@ -1,3 +1,19 @@
+# MassAI — v0.9 en cours (branche de développement)
+
+## Implémenté sur cette branche
+- Sélection des vues multi-passages répartie d'abord par niveau, puis par angle, pour éviter qu'un niveau plus net évince tous les autres.
+- Base v0.8.0 conservée : mesh triangulé rempli/filaire, OBJ, archives .massai et densité inchangés.
+
+## À faire AVANT release v0.9
+- Ajouter tests de sélection multi-niveaux et exécuter tests Android/Gradle ; aucune validation de build n'est encore acquise.
+- Corriger le vote voxel : distinguer hors champ, masque incertain et rejet observé ; conserver une comparaison A/B avec v0.8.
+- Diagnostiquer la disparition des jambes et pieds sur captures réelles ; ne pas promettre une réparation anatomique non observée.
+- Introduire calibration caméra et géométrie 6 DoF vérifiable, sans inventer de distance/hauteur.
+- Valider les volumes sur objets étalons et la répétabilité ; conserver les exports OBJ et .massai.
+- Ne publier APK/AAB qu'après build et tests vérifiés.
+
+---
+
 # MassAI — TODO après v0.8.0
 
 ## Réalisé
