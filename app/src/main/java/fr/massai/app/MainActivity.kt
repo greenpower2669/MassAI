@@ -40,6 +40,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var metricsText: TextView
     private lateinit var methodText: TextView
     private lateinit var modeHelpText: TextView
+    private lateinit var turboReconstructionSwitch: android.widget.Switch
     private lateinit var analysisButton: Button
     private lateinit var rawButton: Button
     private lateinit var repairedButton: Button
@@ -173,6 +174,7 @@ class MainActivity : AppCompatActivity() {
         metricsText = findViewById(R.id.metricsText)
         methodText = findViewById(R.id.methodText)
         modeHelpText = findViewById(R.id.modeHelpText)
+        turboReconstructionSwitch = findViewById(R.id.turboReconstructionSwitch)
         analysisButton = findViewById(R.id.analysisButton)
         rawButton = findViewById(R.id.rawMeshButton)
         repairedButton = findViewById(R.id.repairedMeshButton)
@@ -472,6 +474,8 @@ class MainActivity : AppCompatActivity() {
         weightKg: Double?,
         mode: SegmentationMode
     ) {
+        val turboEnabled = turboReconstructionSwitch.isChecked
+        turboReconstructionSwitch.isEnabled = false
         analysisButton.isEnabled = false
         setModelButtonsEnabled(false)
         modelStatusText.visibility = View.VISIBLE
@@ -503,12 +507,17 @@ class MainActivity : AppCompatActivity() {
 
                 val multiLevelScan =
                     metadata?.sensorAvailable == true && metadata.targetLevels > 1
-                val candidateTarget = when {
+                val turboLevels = if (multiLevelScan) metadata!!.targetLevels.coerceIn(1, 5) else 1
+                val candidateTarget = if (turboEnabled && multiLevelScan) {
+                    turboLevels * 60
+                } else when {
                     metadata?.targetLevels != null && metadata.targetLevels >= 4 -> 96
                     multiLevelScan -> 72
                     else -> 48
                 }
-                val wantedViews = when {
+                val wantedViews = if (turboEnabled && multiLevelScan) {
+                    turboLevels * 25
+                } else when {
                     metadata?.targetLevels != null && metadata.targetLevels >= 4 -> 28
                     multiLevelScan -> 24
                     else -> 20
@@ -550,7 +559,8 @@ class MainActivity : AppCompatActivity() {
                     reconstructor.reconstruct(
                         frames = frames,
                         bodyHeightM = heightM,
-                        mode = mode
+                        mode = mode,
+                        turbo = turboEnabled && multiLevelScan
                     ) { stage, current, total ->
                         runOnUiThread {
                             val progressText = if (total > 1) " $current/$total" else ""
