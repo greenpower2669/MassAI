@@ -73,6 +73,7 @@ class BodyReconstructor : Closeable {
         frames: List<ReconstructionFrame>,
         bodyHeightM: Double,
         mode: SegmentationMode = SegmentationMode.HUMAN,
+        turbo: Boolean = false,
         progress: (stage: String, current: Int, total: Int) -> Unit = { _, _, _ -> }
     ): BodyReconstruction {
         when (mode) {
@@ -160,6 +161,8 @@ class BodyReconstructor : Closeable {
         val dy = bodyHeightM / ny.toDouble()
         val dz = (2.0 * halfExtent) / nz.toDouble()
 
+        // Turbo: only in-frame observations vote; missing coverage is not
+        // negative evidence. Classic mode preserves the v0.8 threshold.
         val requiredSupport = ceil(silhouettes.size * 0.86).toInt()
         val cosAngles = DoubleArray(silhouettes.size)
         val sinAngles = DoubleArray(silhouettes.size)
@@ -179,6 +182,7 @@ class BodyReconstructor : Closeable {
                     val zMeters = -halfExtent + (iz + 0.5) * dz
                     var support = 0
                     var tested = 0
+                    var observed = 0
 
                     for (view in silhouettes.indices) {
                         tested++
@@ -194,16 +198,22 @@ class BodyReconstructor : Closeable {
                                 .roundToInt()
 
                             if (col in 0 until silhouette.width) {
+                                observed++
                                 val p = silhouette.probability[row * silhouette.width + col]
                                 if (p >= silhouette.threshold) support++
                             }
                         }
 
                         val remaining = silhouettes.size - tested
-                        if (support + remaining < requiredSupport) break
+                        if (!turbo && support + remaining < requiredSupport) break
                     }
 
-                    if (support >= requiredSupport) {
+                    val accepted = if (turbo) {
+                        observed >= 3 && support >= ceil(observed * 0.86).toInt()
+                    } else {
+                        support >= requiredSupport
+                    }
+                    if (accepted) {
                         raw[index(ix, iy, iz, nx, nz)] = true
                     }
                 }
