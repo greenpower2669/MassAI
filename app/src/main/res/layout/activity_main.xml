@@ -21,7 +21,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="18dp"
-            android:text="Reconstruction 3D — v0.9 expérimental"
+            android:text="Reconstruction 3D — v1.1 options expérimentales"
             android:textSize="16sp" />
 
         <TextView
@@ -148,6 +148,12 @@
             android:text="Reconstruction Turbo (désactiver pour comparer avec le moteur classique)"
             android:textSize="16sp" />
 
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="VUES PAR PASSAGE : 25 / 40 / 60" android:textSize="16sp" />
+        <Spinner android:id="@+id/viewsPerLevelSpinner" android:layout_width="match_parent" android:layout_height="52dp" android:contentDescription="VUES PAR PASSAGE : 25 / 40 / 60" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="RÉSOLUTION VOXEL : standard / détaillée" android:textSize="16sp" />
+        <Spinner android:id="@+id/voxelResolutionSpinner" android:layout_width="match_parent" android:layout_height="52dp" android:contentDescription="RÉSOLUTION VOXEL : standard / détaillée" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="CONSENSUS DES SILHOUETTES : strict / tolérant" android:textSize="16sp" />
+        <Spinner android:id="@+id/supportSpinner" android:layout_width="match_parent" android:layout_height="52dp" android:contentDescription="CONSENSUS DES SILHOUETTES : strict / tolérant" />
         <Button
             android:id="@+id/analysisButton"
             android:layout_width="match_parent"
