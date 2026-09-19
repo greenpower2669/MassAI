@@ -41,6 +41,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var methodText: TextView
     private lateinit var modeHelpText: TextView
     private lateinit var turboReconstructionSwitch: android.widget.Switch
+    private lateinit var viewsPerLevelSpinner: Spinner
+    private lateinit var voxelResolutionSpinner: Spinner
+    private lateinit var supportSpinner: Spinner
     private lateinit var analysisButton: Button
     private lateinit var rawButton: Button
     private lateinit var repairedButton: Button
@@ -175,6 +178,10 @@ class MainActivity : AppCompatActivity() {
         methodText = findViewById(R.id.methodText)
         modeHelpText = findViewById(R.id.modeHelpText)
         turboReconstructionSwitch = findViewById(R.id.turboReconstructionSwitch)
+        viewsPerLevelSpinner = findViewById(R.id.viewsPerLevelSpinner)
+        voxelResolutionSpinner = findViewById(R.id.voxelResolutionSpinner)
+        supportSpinner = findViewById(R.id.supportSpinner)
+        setupReconstructionOptions()
         analysisButton = findViewById(R.id.analysisButton)
         rawButton = findViewById(R.id.rawMeshButton)
         repairedButton = findViewById(R.id.repairedMeshButton)
@@ -256,6 +263,20 @@ class MainActivity : AppCompatActivity() {
                 exportObjLauncher.launch("MassAI_mesh.obj")
             }
         }
+    }
+
+    private fun setupReconstructionOptions() {
+        fun configure(spinner: Spinner, labels: List<String>, selected: Int = 0) {
+            spinner.adapter = ArrayAdapter(
+                this, android.R.layout.simple_spinner_item, labels
+            ).apply {
+                setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            }
+            spinner.setSelection(selected)
+        }
+        configure(viewsPerLevelSpinner, listOf("25 vues / niveau", "40 vues / niveau", "60 vues / niveau"))
+        configure(voxelResolutionSpinner, listOf("Standard 48 × 96 × 48", "Détaillée 72 × 144 × 72"))
+        configure(supportSpinner, listOf("Strict 86 %", "Tolérant 75 %"))
     }
 
     private fun setupCaptureOptions() {
@@ -475,6 +496,12 @@ class MainActivity : AppCompatActivity() {
         mode: SegmentationMode
     ) {
         val turboEnabled = turboReconstructionSwitch.isChecked
+        val selectedViewsPerLevel = intArrayOf(25, 40, 60)[viewsPerLevelSpinner.selectedItemPosition.coerceIn(0, 2)]
+        val selectedVoxelDetail = voxelResolutionSpinner.selectedItemPosition == 1
+        val selectedSupportRatio = if (supportSpinner.selectedItemPosition == 1) 0.75 else 0.86
+        viewsPerLevelSpinner.isEnabled = false
+        voxelResolutionSpinner.isEnabled = false
+        supportSpinner.isEnabled = false
         turboReconstructionSwitch.isEnabled = false
         analysisButton.isEnabled = false
         setModelButtonsEnabled(false)
@@ -509,14 +536,14 @@ class MainActivity : AppCompatActivity() {
                     metadata?.sensorAvailable == true && metadata.targetLevels > 1
                 val turboLevels = if (multiLevelScan) metadata!!.targetLevels.coerceIn(1, 5) else 1
                 val candidateTarget = if (turboEnabled && multiLevelScan) {
-                    turboLevels * 60
+                    turboLevels * (selectedViewsPerLevel * 3)
                 } else when {
                     metadata?.targetLevels != null && metadata.targetLevels >= 4 -> 96
                     multiLevelScan -> 72
                     else -> 48
                 }
                 val wantedViews = if (turboEnabled && multiLevelScan) {
-                    turboLevels * 25
+                    turboLevels * selectedViewsPerLevel
                 } else when {
                     metadata?.targetLevels != null && metadata.targetLevels >= 4 -> 28
                     multiLevelScan -> 24
@@ -560,7 +587,9 @@ class MainActivity : AppCompatActivity() {
                         frames = frames,
                         bodyHeightM = heightM,
                         mode = mode,
-                        turbo = turboEnabled && multiLevelScan
+                        turbo = turboEnabled && multiLevelScan,
+                        voxelDetail = selectedVoxelDetail,
+                        supportRatio = selectedSupportRatio
                     ) { stage, current, total ->
                         runOnUiThread {
                             val progressText = if (total > 1) " $current/$total" else ""
@@ -654,11 +683,17 @@ class MainActivity : AppCompatActivity() {
                             "${result.validViews}/${result.totalViews} vues."
                     analysisButton.isEnabled = true
                     turboReconstructionSwitch.isEnabled = true
+                    viewsPerLevelSpinner.isEnabled = true
+                    voxelResolutionSpinner.isEnabled = true
+                    supportSpinner.isEnabled = true
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     analysisButton.isEnabled = true
                     turboReconstructionSwitch.isEnabled = true
+                    viewsPerLevelSpinner.isEnabled = true
+                    voxelResolutionSpinner.isEnabled = true
+                    supportSpinner.isEnabled = true
                     setModelButtonsEnabled(false)
                     modelStatusText.visibility = View.VISIBLE
                     modelStatusText.text =
