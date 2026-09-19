@@ -181,20 +181,34 @@ object FrameSelector {
         }
         if (withAngles.isEmpty()) return emptyList()
 
+        // Balance the available views across scan levels BEFORE distributing
+        // angles. Previously every level competed in the same angular bins,
+        // so a sharp upper-level image could displace all lower-level views.
+        val byLevel = withAngles.groupBy { it.third }.toSortedMap()
+        val levels = byLevel.keys.toList()
+        val baseQuota = wanted / levels.size
+        val remainder = wanted % levels.size
+        val chosen = ArrayList<CandidateFrame>()
         val fullTurn = 2.0 * Math.PI
-        return (0 until wanted).mapNotNull { bin ->
-            val lo = fullTurn * bin / wanted.toDouble()
-            val hi = fullTurn * (bin + 1) / wanted.toDouble()
 
-            withAngles
-                .asSequence()
-                .filter { (_, angle, _) ->
-                    if (bin == wanted - 1) angle >= lo && angle <= hi
-                    else angle >= lo && angle < hi
-                }
-                .maxByOrNull { (candidate, _, _) -> candidate.blurScore }
-                ?.first
-        }.sortedBy { it.timeMs }
+        levels.forEachIndexed { levelIndex, level ->
+            val quota = baseQuota + if (levelIndex < remainder) 1 else 0
+            if (quota == 0) return@forEachIndexed
+            val levelViews = byLevel.getValue(level)
+            for (bin in 0 until quota) {
+                val lo = fullTurn * bin / quota.toDouble()
+                val hi = fullTurn * (bin + 1) / quota.toDouble()
+                levelViews.asSequence()
+                    .filter { (_, angle, _) ->
+                        if (bin == quota - 1) angle >= lo && angle <= hi
+                        else angle >= lo && angle < hi
+                    }
+                    .maxByOrNull { (candidate, _, _) -> candidate.blurScore }
+                    ?.first
+                    ?.let(chosen::add)
+            }
+        }
+        return chosen.distinctBy { it.timeMs }.sortedBy { it.timeMs }
     }
 
     private fun selectByTime(
