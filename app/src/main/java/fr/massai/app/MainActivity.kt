@@ -653,10 +653,12 @@ class MainActivity : AppCompatActivity() {
                         "Reconstruction $modeName terminée ✓ — " +
                             "${result.validViews}/${result.totalViews} vues."
                     analysisButton.isEnabled = true
+                    turboReconstructionSwitch.isEnabled = true
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     analysisButton.isEnabled = true
+                    turboReconstructionSwitch.isEnabled = true
                     setModelButtonsEnabled(false)
                     modelStatusText.visibility = View.VISIBLE
                     modelStatusText.text =
