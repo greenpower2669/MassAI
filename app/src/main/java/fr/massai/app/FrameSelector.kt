@@ -127,15 +127,27 @@ object FrameSelector {
 
         if (selected.isEmpty()) return emptyList()
 
-        val medianBlur = selected.map { it.blurScore }.sorted()
-            .let { it[it.size / 2].coerceAtLeast(1.0) }
+        // Exposure/blur may differ by passage. A global median could
+        // discard every lower-level view (legs) in favour of the upper views.
+        val mediansByLevel = selected.groupBy {
+            if (hasMeasuredAngles) metadata!!.levelAt(it.timeMs) ?: 0 else 0
+        }.mapValues { (_, views) ->
+            views.map { it.blurScore }.sorted()
+                .let { it[it.size / 2].coerceAtLeast(1.0) }
+        }
 
         val filtered = ArrayList<ReconstructionFrame>()
-        var previousSignature: DoubleArray? = null
+        val signaturesByLevel = HashMap<Int, DoubleArray>()
 
         selected.forEachIndexed { index, candidate ->
-            val tooBlurry = candidate.blurScore < medianBlur * 0.18
-            val tooSimilar = previousSignature?.let {
+            val scanLevel = if (hasMeasuredAngles) {
+                metadata!!.levelAt(candidate.timeMs)?.coerceAtLeast(0) ?: 0
+            } else {
+                0
+            }
+            val tooBlurry =
+                candidate.blurScore < mediansByLevel.getValue(scanLevel) * 0.18
+            val tooSimilar = signaturesByLevel[scanLevel]?.let {
                 FrameQuality.signatureDistance(it, candidate.signature) < 0.015
             } ?: false
 
@@ -145,12 +157,6 @@ object FrameSelector {
                 } else {
                     2.0 * Math.PI * filtered.size.toDouble() / wanted.toDouble()
                 }
-                val scanLevel = if (hasMeasuredAngles) {
-                    metadata!!.levelAt(candidate.timeMs)?.coerceAtLeast(0) ?: 0
-                } else {
-                    0
-                }
-
                 filtered += ReconstructionFrame(
                     file = candidate.file,
                     timeMs = candidate.timeMs,
@@ -159,7 +165,7 @@ object FrameSelector {
                     measuredAngle = hasMeasuredAngles,
                     scanLevel = scanLevel
                 )
-                previousSignature = candidate.signature
+                signaturesByLevel[scanLevel] = candidate.signature
             }
         }
 

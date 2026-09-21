@@ -1,3 +1,9 @@
+# MassAI — ancien suivi conservé
+
+Suivi actif de cette branche : [todo.md](todo.md). Ce document hérité décrit surtout les versions 0.8 et 0.9 et ne constitue pas l'état actuel de la v1.2 expérimentale.
+
+---
+
 # MassAI — v0.9 en cours (branche de développement)
 
 ## Implémenté sur cette branche

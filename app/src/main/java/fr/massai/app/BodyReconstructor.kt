@@ -154,18 +154,20 @@ class BodyReconstructor : Closeable {
             .times(0.62)
             .coerceIn(bodyHeightM * 0.18, bodyHeightM * 0.60)
 
-        val nx = if (turbo && voxelDetail) 72 else 48
-        val ny = if (turbo && voxelDetail) 144 else 96
-        val nz = if (turbo && voxelDetail) 72 else 48
+        val nx = if (voxelDetail) 72 else 48
+        val ny = if (voxelDetail) 144 else 96
+        val nz = if (voxelDetail) 72 else 48
         val raw = BooleanArray(nx * ny * nz)
 
         val dx = (2.0 * halfExtent) / nx.toDouble()
         val dy = bodyHeightM / ny.toDouble()
         val dz = (2.0 * halfExtent) / nz.toDouble()
 
-        // Turbo: only in-frame observations vote; missing coverage is not
-        // negative evidence. Classic mode preserves the v0.8 threshold.
-        val requiredSupport = ceil(silhouettes.size * 0.86).toInt()
+        // A pixel outside a frame cannot vote against the subject.
+        // Require independent observed evidence even in tolerant mode: a
+        // handful of cropped frames must not create invented limbs.
+        val minimumObserved =
+            VisualHullVoting.minimumObserved(silhouettes.size, turbo)
         val cosAngles = DoubleArray(silhouettes.size)
         val sinAngles = DoubleArray(silhouettes.size)
 
@@ -183,11 +185,9 @@ class BodyReconstructor : Closeable {
                 for (iz in 0 until nz) {
                     val zMeters = -halfExtent + (iz + 0.5) * dz
                     var support = 0
-                    var tested = 0
                     var observed = 0
 
                     for (view in silhouettes.indices) {
-                        tested++
                         val silhouette = silhouettes[view]
                         val row = (silhouette.bottom - yMeters * silhouette.pxPerMeter)
                             .roundToInt()
@@ -206,15 +206,10 @@ class BodyReconstructor : Closeable {
                             }
                         }
 
-                        val remaining = silhouettes.size - tested
-                        if (!turbo && support + remaining < requiredSupport) break
                     }
 
-                    val accepted = if (turbo) {
-                        observed >= 3 && support >= ceil(observed * supportRatio).toInt()
-                    } else {
-                        support >= requiredSupport
-                    }
+                    val accepted =
+                        VisualHullVoting.accepts(support, observed, minimumObserved, supportRatio)
                     if (accepted) {
                         raw[index(ix, iy, iz, nx, nz)] = true
                     }
@@ -589,7 +584,7 @@ class BodyReconstructor : Closeable {
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
         var sample = 1
-        while (max(bounds.outWidth / sample, bounds.outHeight / sample) > maxDimension * 2) {
+        while (max(bounds.outWidth / sample, bounds.outHeight / sample) > maxDimension) {
             sample *= 2
         }
 

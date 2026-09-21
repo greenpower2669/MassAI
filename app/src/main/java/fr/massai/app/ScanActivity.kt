@@ -385,7 +385,7 @@ class ScanActivity : AppCompatActivity(), SensorEventListener {
                         recordingStartNs = SystemClock.elapsedRealtimeNanos()
                         recordButton.text = "ARRÊTER ET RECONSTRUIRE"
                         statusText.text =
-                            "Niveau 1/$targetLevels — suivez l'anneau autour du sujet."
+                            "Niveau 1/$targetLevels — gardez tête ET pieds dans le cadre, distance stable."
                         updateCoverageText()
                     }
 

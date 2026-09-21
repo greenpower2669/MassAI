@@ -1,5 +1,15 @@
 # MassAI
 
+> **Branche expérimentale v1.2.0-beta1 (stabilisation)** — issue de `massai-v1.1-options`. Pas de release publiée et pas de validation sur téléphone à ce stade. `main` et la branche v1.1 restent inchangées.
+
+Cette branche corrige l'application de la résolution détaillée et de la tolérance en mode classique, équilibre les vues nettes entre passages et limite les JPEG intermédiaires à 960 px de grand côté. Le vote voxel utilise les **vues où le voxel est réellement dans l'image**, avec un nombre minimum d'observations : hors champ n'est pas un vote négatif. Cela ne fournit ni pose caméra 6 DoF ni anatomie garantie. Les densités et volumes restent expérimentaux.
+
+Lire [brain.md](brain.md), [brainmap.md](brainmap.md), [debughistorical.md](debughistorical.md) et [todo.md](todo.md) ; `TODO.md` est l'historique hérité.
+
+---
+
+# MassAI
+
 POC Android de reconstruction 3D corporelle / humanoïde à partir d'un smartphone.
 
 ## État actuel — v0.8.0

@@ -1,6 +1,7 @@
 package fr.massai.app
 
 import android.app.Activity
+import android.graphics.Bitmap
 import android.content.Context
 import android.content.Intent
 import android.media.MediaMetadataRetriever
@@ -535,14 +536,14 @@ class MainActivity : AppCompatActivity() {
                 val multiLevelScan =
                     metadata?.sensorAvailable == true && metadata.targetLevels > 1
                 val turboLevels = if (multiLevelScan) metadata!!.targetLevels.coerceIn(1, 5) else 1
-                val candidateTarget = if (turboEnabled && multiLevelScan) {
+                val candidateTarget = if (turboEnabled) {
                     turboLevels * (selectedViewsPerLevel * 3)
                 } else when {
                     metadata?.targetLevels != null && metadata.targetLevels >= 4 -> 96
                     multiLevelScan -> 72
                     else -> 48
                 }
-                val wantedViews = if (turboEnabled && multiLevelScan) {
+                val wantedViews = if (turboEnabled) {
                     turboLevels * selectedViewsPerLevel
                 } else when {
                     metadata?.targetLevels != null && metadata.targetLevels >= 4 -> 28
@@ -587,7 +588,7 @@ class MainActivity : AppCompatActivity() {
                         frames = frames,
                         bodyHeightM = heightM,
                         mode = mode,
-                        turbo = turboEnabled && multiLevelScan,
+                        turbo = turboEnabled,
                         voxelDetail = selectedVoxelDetail,
                         supportRatio = selectedSupportRatio
                     ) { stage, current, total ->
@@ -767,25 +768,40 @@ class MainActivity : AppCompatActivity() {
                     MediaMetadataRetriever.OPTION_CLOSEST
                 ) ?: continue
 
-                val blurScore = FrameQuality.blurScore(bitmap)
-                val signature = FrameQuality.signature(bitmap)
-
-                val file = File(outputDir, "candidate_%03d.jpg".format(i + 1))
-                FileOutputStream(file).use { stream ->
-                    bitmap.compress(
-                        android.graphics.Bitmap.CompressFormat.JPEG,
-                        90,
-                        stream
-                    )
+                try {
+                    // Source may be 4K, but the segmentation runs at <= 640px.
+                    // Bound cached JPEG size and do not hold both full-size and
+                    // scaled bitmaps beyond this one candidate.
+                    val longest = maxOf(bitmap.width, bitmap.height)
+                    val cached = if (longest > 960) {
+                        val scale = 960.0 / longest
+                        Bitmap.createScaledBitmap(
+                            bitmap,
+                            (bitmap.width * scale).roundToInt().coerceAtLeast(1),
+                            (bitmap.height * scale).roundToInt().coerceAtLeast(1),
+                            true
+                        )
+                    } else {
+                        bitmap
+                    }
+                    try {
+                        val blurScore = FrameQuality.blurScore(cached)
+                        val signature = FrameQuality.signature(cached)
+                        val file = File(outputDir, "candidate_%03d.jpg".format(i + 1))
+                        FileOutputStream(file).use { stream ->
+                            check(cached.compress(
+                                android.graphics.Bitmap.CompressFormat.JPEG,
+                                90,
+                                stream
+                            )) { "Impossible d'enregistrer une vue candidate." }
+                        }
+                        candidates += CandidateFrame(file, timeMs, blurScore, signature)
+                    } finally {
+                        if (cached !== bitmap) cached.recycle()
+                    }
+                } finally {
+                    bitmap.recycle()
                 }
-                bitmap.recycle()
-
-                candidates += CandidateFrame(
-                    file = file,
-                    timeMs = timeMs,
-                    blurScore = blurScore,
-                    signature = signature
-                )
             }
         } finally {
             retriever.release()
