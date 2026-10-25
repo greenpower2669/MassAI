@@ -1,0 +1,36 @@
+name: MassAI reconstruction preview v1.2.2
+on:
+  push:
+    branches: [ "feature/massai-reconstruction-audit-fixes-v1" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build test APK and AAB
+        run: gradle clean testDebugUnitTest :app:assembleRelease :app:bundleRelease --stacktrace
+      - name: Verify and name outputs
+        run: |
+          test -s app/build/outputs/apk/release/app-release.apk
+          test -s app/build/outputs/bundle/release/app-release.aab
+          cp app/build/outputs/apk/release/app-release.apk MassAI-v1.2.2-preview2.apk
+          cp app/build/outputs/bundle/release/app-release.aab MassAI-v1.2.2-preview2.aab
+          unzip -t MassAI-v1.2.2-preview2.apk >/dev/null
+          unzip -t MassAI-v1.2.2-preview2.aab >/dev/null
+      - name: Publish test prerelease after green CI only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v1.2.2-preview2             MassAI-v1.2.2-preview2.apk             MassAI-v1.2.2-preview2.aab             --title "MassAI v1.2.2-preview2 (experimental)"             --notes "APK/AAB de test signes debug ; aucune garantie de fidelite anatomique ni de volume scientifique. Les signatures debug peuvent differer selon le build : desinstaller l'ancienne version si Android refuse la mise a jour."             --target "$GITHUB_SHA" --prerelease

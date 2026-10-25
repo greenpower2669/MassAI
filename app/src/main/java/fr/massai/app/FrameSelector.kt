@@ -194,7 +194,7 @@ object FrameSelector {
         val levels = byLevel.keys.toList()
         val baseQuota = wanted / levels.size
         val remainder = wanted % levels.size
-        val chosen = ArrayList<CandidateFrame>()
+        val chosen = ArrayList<Triple<CandidateFrame, Double, Int>>()
         val fullTurn = 2.0 * Math.PI
 
         levels.forEachIndexed { levelIndex, level ->
@@ -210,11 +210,37 @@ object FrameSelector {
                         else angle >= lo && angle < hi
                     }
                     .maxByOrNull { (candidate, _, _) -> candidate.blurScore }
-                    ?.first
                     ?.let(chosen::add)
             }
+
+            // Fill missing angular sectors from other valid shots of this level.
+            // Prefer angles furthest away from already selected shots.
+            while (chosen.count { it.third == level } < quota) {
+                val previous = chosen.filter { it.third == level }
+                val remaining = levelViews.asSequence()
+                    .filter { candidate -> chosen.none { it.first.timeMs == candidate.first.timeMs } }
+                    .maxByOrNull { (candidate, angle, _) ->
+                        val distance = previous.minOfOrNull {
+                            OrientationMath.circularDistance(angle, it.second)
+                        } ?: Math.PI
+                        distance + candidate.blurScore.coerceAtLeast(0.0) * 0.000001
+                    } ?: break
+                chosen += remaining
+            }
         }
-        return chosen.distinctBy { it.timeMs }.sortedBy { it.timeMs }
+
+        // Some levels may have fewer candidates than their quota.
+        while (chosen.size < wanted) {
+            val extra = withAngles.asSequence()
+                .filter { candidate -> chosen.none { it.first.timeMs == candidate.first.timeMs } }
+                .maxByOrNull { (_, angle, level) ->
+                    chosen.asSequence().filter { it.third == level }
+                        .map { OrientationMath.circularDistance(angle, it.second) }
+                        .minOrNull() ?: Math.PI
+                } ?: break
+            chosen += extra
+        }
+        return chosen.distinctBy { it.first.timeMs }.map { it.first }.sortedBy { it.timeMs }
     }
 
     private fun selectByTime(

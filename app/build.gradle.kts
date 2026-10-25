@@ -8,8 +8,8 @@ android {
         applicationId = "fr.massai.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.2.0-beta1"
+        versionCode = 14
+        versionName = "1.2.2-preview2"
     }
 
     buildTypes {

@@ -9,7 +9,6 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
-import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -175,17 +174,14 @@ class BodyModelView @JvmOverloads constructor(
             v++
         }
 
-        val triangleCount = mesh.triangleCount
-        val stride = ceil(triangleCount / MAX_RENDER_TRIANGLES.toDouble())
-            .toInt()
-            .coerceAtLeast(1)
-
-        val triangles = ArrayList<ProjectedTriangle>(
-            (triangleCount / stride).coerceAtLeast(1)
+        // Voxel faces are pairs of triangles. Decimate complete faces:
+        // never leave a triangular hole in an otherwise intact voxel quad.
+        val selectedTriangles = MeshTriangleSampling.indices(
+            mesh.triangleCount, MAX_RENDER_TRIANGLES
         )
+        val triangles = ArrayList<ProjectedTriangle>(selectedTriangles.size)
 
-        var t = 0
-        while (t < triangleCount) {
+        for (t in selectedTriangles) {
             val base = t * 3
             val a = mesh.indices[base]
             val b = mesh.indices[base + 1]
@@ -196,7 +192,6 @@ class BodyModelView @JvmOverloads constructor(
             val zc = projected[c * 3 + 2]
             triangles += ProjectedTriangle(a, b, c, (za + zb + zc) / 3f)
 
-            t += stride
         }
 
         triangles.sortByDescending { it.depth }

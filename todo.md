@@ -16,3 +16,34 @@
 ## Publication
 - [ ] Pas de release tant que build et tests téléphone ne sont pas vérifiés ; ensuite APK/AAB versionnés dans GitHub Releases et liens directs, sans ZIP substitut.
 - Branche d'origine v1.1 et `main` conservées ; suivi historique dans `TODO.md`.
+
+## MASSAI-FIX-20261025 — nouvelle branche expérimentale
+### Changements de code faits (validation CI à vérifier)
+- [x] Rendu des faces voxel par paires de triangles, test dédié.
+- [x] Complément des quotas de vues par niveau si secteurs vides, test dédié.
+- [x] Mesures angulaires non inventées dans le score et l'affichage pour les vidéos importées.
+- [x] Décodage vidéo directement réduit sur Android 8.1+ ; repli préservé.
+- [x] Version 1.2.1-preview1 ; workflow de test et préversion APK/AAB nommés.
+### Non encore fait : prochains tests et correction de fond
+- [ ] CI GitHub verte, APK/AAB intègres, liens directs et signature vérifiés ; ne pas déclarer de release prématurément.
+- [ ] Comparer la même vidéo sous 1.1, 1.2 et préversion (y compris silhouette 2D, rendu et export OBJ).
+- [ ] Instrumentation par masque/angle/étage, normalisation sol et hauteur ; discriminer erreurs de segmentation et erreurs de projection.
+- [ ] Géométrie caméra 6 DoF, intrinsics, distorsion et calibration métrique avec objets étalons.
+- [ ] Mesurer CPU/RAM 25/40/60 vues par niveau × 1–5, caméra normale/ultra, compatibilité Samsung Android 16.
+- [ ] Étudier l'érosion des membres par consensus voxel et nettoyage A/B ; apporter preuve sur vrai scan.
+- [ ] Ne pas merger main, ni présenter volumes/densité comme validés scientifiquement.
+
+### Préversion 2 — 25/10/2026
+- [x] Rejet des vues dont le masque touche les marges verticales avant la mise à l'échelle par hauteur.
+- [x] Masques persistants convertis de Float32 à Byte ; messages explicites et vues rejetées affichées.
+- [x] Tests de cadrage, version 14 / v1.2.2-preview2 ; CI et Release à vérifier après push.
+- [ ] Tester vraies vidéos avec et sans ce filtre : attention aux masques légitimement très proches des bords.
+- [ ] Mesurer mémoire et vérifier l'égalité des votes binaires avant/après ; contrôler anciennes archives sans nouveau compteur sérialisé.
+- [ ] Calibration 6 DoF et véritables mesures 3D, régression jambes/pieds sur étalons : toujours ouverts.
+
+### Preuves GitHub vérifiées — 25/10/2026
+- [x] Préversion 1 : workflow [40195488712](https://github.com/greenpower2669/MassAI/actions/runs/40195488712), tests Gradle + compilation APK/AAB + `unzip -t` = succès ; [Release v1.2.1-preview1](https://github.com/greenpower2669/MassAI/releases/tag/v1.2.1-preview1).
+- [x] Préversion 2 : workflow [40195915431](https://github.com/greenpower2669/MassAI/actions/runs/40195915431) = succès aux mêmes étapes ; [Release v1.2.2-preview2](https://github.com/greenpower2669/MassAI/releases/tag/v1.2.2-preview2) et fichiers APK/AAB disponibles et nommés.
+- [x] PR [#1](https://github.com/greenpower2669/MassAI/pull/1) créée **brouillon**, base v1.2, non fusionnée ; `main` intact.
+- [ ] Vérifier la signature et l'installation sur Samsung Android 16, nécessité éventuelle de désinstaller l'ancienne version car la signature debug peut varier selon l'environnement CI.
+- [ ] Contrôler les rendus 3D et silhouettes réelles ; validation métrique et 6 DoF toujours ouverts.
