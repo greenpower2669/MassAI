@@ -40,3 +40,10 @@
 - [ ] Tester vraies vidéos avec et sans ce filtre : attention aux masques légitimement très proches des bords.
 - [ ] Mesurer mémoire et vérifier l'égalité des votes binaires avant/après ; contrôler anciennes archives sans nouveau compteur sérialisé.
 - [ ] Calibration 6 DoF et véritables mesures 3D, régression jambes/pieds sur étalons : toujours ouverts.
+
+### Preuves GitHub vérifiées — 25/10/2026
+- [x] Préversion 1 : workflow [40195488712](https://github.com/greenpower2669/MassAI/actions/runs/40195488712), tests Gradle + compilation APK/AAB + `unzip -t` = succès ; [Release v1.2.1-preview1](https://github.com/greenpower2669/MassAI/releases/tag/v1.2.1-preview1).
+- [x] Préversion 2 : workflow [40195915431](https://github.com/greenpower2669/MassAI/actions/runs/40195915431) = succès aux mêmes étapes ; [Release v1.2.2-preview2](https://github.com/greenpower2669/MassAI/releases/tag/v1.2.2-preview2) et fichiers APK/AAB disponibles et nommés.
+- [x] PR [#1](https://github.com/greenpower2669/MassAI/pull/1) créée **brouillon**, base v1.2, non fusionnée ; `main` intact.
+- [ ] Vérifier la signature et l'installation sur Samsung Android 16, nécessité éventuelle de désinstaller l'ancienne version car la signature debug peut varier selon l'environnement CI.
+- [ ] Contrôler les rendus 3D et silhouettes réelles ; validation métrique et 6 DoF toujours ouverts.

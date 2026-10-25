@@ -14,3 +14,8 @@
 
 ### Point v1.2.2-preview2
 - Deuxième lot : sécurité du cadrage des silhouettes et masque binaire compact ; pas de validation sur captures réelles, pose caméra 6 DoF toujours absente.
+
+### Livraison de validation du 25 octobre 2026
+- Version v1.2.2-preview2 publiée en préversion avec APK/AAB directs : https://github.com/greenpower2669/MassAI/releases/tag/v1.2.2-preview2
+- CI vérifiée : https://github.com/greenpower2669/MassAI/actions/runs/40195915431
+- Branche et PR #1 brouillon conservées, aucun merge. Mission **livrée partiellement, à valider** : calibration 6 DoF et essais métriques encore à produire.

@@ -27,3 +27,8 @@
 - **Mécanisme prouvé par lecture** : normaliser une silhouette coupée aux pieds selon sa seule hauteur peut déplacer artificiellement la ligne de sol vers les chevilles. Le filtre écarte les masques collant aux bords verticaux et indique le nombre de rejets.
 - **Limite** : des captures très serrées peuvent désormais ne plus passer le minimum 8 vues ; hypothèse de correction à éprouver, sans affirmer la restauration anatomique.
 - **Mémoire** : les FloatArray de confiance étaient conservés inutilement pour des votes binaires ; les ByteArray les remplacent. Compteur de rejets et messages ajoutés sans exposer les images dans des logs.
+
+## Vérification de build — 25/10/2026
+- CI `40195488712` : succès complet pour lot 1 (tests unitaires, APK/AAB, intégrité ZIP, Release). Commit `fcb3f34e`.
+- CI `40195915431` : succès complet pour lot 2, fichier d'APK et AAB présents en Release préversion2. Commit `a797f506`.
+- Non testés : installation et comportements réels caméra/segmentation sur Samsung, exactitude géométrique et compatibilité signature. Un build réussi n'est pas une preuve que les jambes sont correctement reconstruites.
