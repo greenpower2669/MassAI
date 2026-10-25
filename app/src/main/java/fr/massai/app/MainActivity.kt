@@ -651,8 +651,8 @@ class MainActivity : AppCompatActivity() {
 
                     metricsText.text = String.format(
                         Locale.FRANCE,
-                        "Volume réparé : %.1f L\n" +
-                            "Volume brut voxel : %.1f L\n" +
+                        "Volume réparé indicatif (non calibré) : %.1f L\n" +
+                            "Volume brut voxel indicatif : %.1f L\n" +
                             "%s\n" +
                             "Mesh : %d triangles\n" +
                             "Qualité technique : %d/100\n" +
@@ -660,7 +660,8 @@ class MainActivity : AppCompatActivity() {
                             "Corrections : %.2f %%\n" +
                             "Artefacts supprimés : %d voxels\n" +
                             "Composantes : %d → %d\n" +
-                            "Niveaux exploités : %d",
+                            "Niveaux exploités : %d\n" +
+                            "Vues exclues (silhouette coupée) : %d",
                         liters,
                         rawLiters,
                         densityLine,
@@ -672,7 +673,8 @@ class MainActivity : AppCompatActivity() {
                         result.removedIslandVoxels,
                         result.componentsBeforeCleanup,
                         result.componentsAfterCleanup,
-                        frames.map { it.scanLevel }.distinct().size
+                        frames.map { it.scanLevel }.distinct().size,
+                        result.rejectedCroppedViews
                     )
 
                     val modeName = if (mode == SegmentationMode.OBJECT) {

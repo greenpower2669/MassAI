@@ -2,6 +2,7 @@ package fr.massai.app
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.Log
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.Segmentation
@@ -38,7 +39,8 @@ data class BodyReconstruction(
     val meanBlurScore: Double,
     val removedIslandVoxels: Int,
     val componentsBeforeCleanup: Int,
-    val componentsAfterCleanup: Int
+    val componentsAfterCleanup: Int,
+    val rejectedCroppedViews: Int = 0
 )
 
 class BodyReconstructor : Closeable {
@@ -46,7 +48,7 @@ class BodyReconstructor : Closeable {
     private data class Silhouette(
         val width: Int,
         val height: Int,
-        val probability: FloatArray,
+        val mask: ByteArray, // Thresholded, one byte per pixel instead of Float32.
         val top: Int,
         val bottom: Int,
         val rowCenter: FloatArray,
@@ -99,6 +101,7 @@ class BodyReconstructor : Closeable {
         }
 
         val silhouettes = ArrayList<Silhouette>()
+        var rejectedCroppedViews = 0
         frames.forEachIndexed { index, frame ->
             progress("Segmentation silhouette", index + 1, frames.size)
             val maxDimension = if (mode == SegmentationMode.OBJECT) 640 else 480
@@ -121,7 +124,16 @@ class BodyReconstructor : Closeable {
                         measuredAngle = frame.measuredAngle
                     )
                 }
-                silhouette?.let(silhouettes::add)
+                if (silhouette != null) {
+                    if (SilhouetteFraming.isVerticallyClipped(
+                        silhouette.top, silhouette.bottom, silhouette.height
+                    )) {
+                        rejectedCroppedViews++
+                        Log.w("MassAI", "Cropped mask rejected: frame ${frame.timeMs}ms, level ${frame.scanLevel}")
+                    } else {
+                        silhouettes.add(silhouette)
+                    }
+                }
             } finally {
                 bitmap.recycle()
             }
@@ -129,7 +141,9 @@ class BodyReconstructor : Closeable {
 
         if (silhouettes.size < 8) {
             throw IllegalStateException(
-                "Seulement ${silhouettes.size} vues exploitables. Il en faut au moins 8."
+                "Seulement ${silhouettes.size} vues correctement cadrées sur ${frames.size}. " +
+                    "${rejectedCroppedViews} silhouette(s) coupées en haut ou en bas. " +
+                    "Gardez tête et pieds dans le cadre avec une marge sur chaque passage."
             )
         }
 
@@ -202,8 +216,7 @@ class BodyReconstructor : Closeable {
 
                             if (col in 0 until silhouette.width) {
                                 observed++
-                                val p = silhouette.probability[row * silhouette.width + col]
-                                if (p >= silhouette.threshold) support++
+                                if (silhouette.mask[row * silhouette.width + col] != 0.toByte()) support++
                             }
                         }
 
@@ -308,7 +321,8 @@ class BodyReconstructor : Closeable {
             meanBlurScore = frames.map { it.blurScore }.average(),
             removedIslandVoxels = removedIslandVoxels,
             componentsBeforeCleanup = rawCleanup.componentsBefore,
-            componentsAfterCleanup = repairedCleanup.componentsAfter
+            componentsAfterCleanup = repairedCleanup.componentsAfter,
+            rejectedCroppedViews = rejectedCroppedViews
         )
     }
 
@@ -442,10 +456,17 @@ class BodyReconstructor : Closeable {
         val pxPerMeter = subjectHeightPx.toDouble() / bodyHeightM
         val maxSpanMeters = maxSpanPx.toDouble() / pxPerMeter
 
+        // After thresholding, only binary occupancy is needed during carving.
+        // Avoid retaining hundreds of floating-point masks simultaneously.
+        val binaryMask = ByteArray(data.size)
+        for (i in data.indices) {
+            if (data[i] >= threshold) binaryMask[i] = 1.toByte()
+        }
+
         return Silhouette(
             width = width,
             height = height,
-            probability = data,
+            mask = binaryMask,
             top = top,
             bottom = bottom,
             rowCenter = centers,

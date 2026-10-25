@@ -22,3 +22,8 @@
 - **Prouvé** : secteurs sans candidats dans `FrameSelector` ne récupéraient pas les images d'autres secteurs ; correctif par complément des quotas.
 - **Optimisation conditionnelle** : demande de frames réduites directement à MediaMetadataRetriever sur Android 8.1+ ; bénéfice mémoire/performance à mesurer sur téléphone.
 - **À confirmer sur captures réelles** : jambes/pieds manquants, erreurs des masques, recentrage, consensus voxel, distorsion, géométrie 6 DoF ; ne pas annoncer de réparation anatomique avant reproduction.
+
+## 25/10/2026 — protection contre pied tronqué (préversion 2)
+- **Mécanisme prouvé par lecture** : normaliser une silhouette coupée aux pieds selon sa seule hauteur peut déplacer artificiellement la ligne de sol vers les chevilles. Le filtre écarte les masques collant aux bords verticaux et indique le nombre de rejets.
+- **Limite** : des captures très serrées peuvent désormais ne plus passer le minimum 8 vues ; hypothèse de correction à éprouver, sans affirmer la restauration anatomique.
+- **Mémoire** : les FloatArray de confiance étaient conservés inutilement pour des votes binaires ; les ByteArray les remplacent. Compteur de rejets et messages ajoutés sans exposer les images dans des logs.

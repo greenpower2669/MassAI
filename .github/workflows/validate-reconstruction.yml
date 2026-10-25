@@ -1,4 +1,4 @@
-name: MassAI reconstruction preview v1.2.1
+name: MassAI reconstruction preview v1.2.2
 on:
   push:
     branches: [ "feature/massai-reconstruction-audit-fixes-v1" ]
@@ -25,12 +25,12 @@ jobs:
         run: |
           test -s app/build/outputs/apk/release/app-release.apk
           test -s app/build/outputs/bundle/release/app-release.aab
-          cp app/build/outputs/apk/release/app-release.apk MassAI-v1.2.1-preview1.apk
-          cp app/build/outputs/bundle/release/app-release.aab MassAI-v1.2.1-preview1.aab
-          unzip -t MassAI-v1.2.1-preview1.apk >/dev/null
-          unzip -t MassAI-v1.2.1-preview1.aab >/dev/null
+          cp app/build/outputs/apk/release/app-release.apk MassAI-v1.2.2-preview2.apk
+          cp app/build/outputs/bundle/release/app-release.aab MassAI-v1.2.2-preview2.aab
+          unzip -t MassAI-v1.2.2-preview2.apk >/dev/null
+          unzip -t MassAI-v1.2.2-preview2.aab >/dev/null
       - name: Publish test prerelease after green CI only
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v1.2.1-preview1             MassAI-v1.2.1-preview1.apk             MassAI-v1.2.1-preview1.aab             --title "MassAI v1.2.1-preview1 (experimental)"             --notes "APK/AAB de test signes debug ; aucune garantie de fidelite anatomique ni de volume scientifique. Les signatures debug peuvent differer selon le build : desinstaller l'ancienne version si Android refuse la mise a jour."             --target "$GITHUB_SHA" --prerelease
+          gh release create v1.2.2-preview2             MassAI-v1.2.2-preview2.apk             MassAI-v1.2.2-preview2.aab             --title "MassAI v1.2.2-preview2 (experimental)"             --notes "APK/AAB de test signes debug ; aucune garantie de fidelite anatomique ni de volume scientifique. Les signatures debug peuvent differer selon le build : desinstaller l'ancienne version si Android refuse la mise a jour."             --target "$GITHUB_SHA" --prerelease

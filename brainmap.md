@@ -38,3 +38,8 @@ Vue manquante/bas hors champ → en v1.1 support négatif « total vues » → v
 - `BodyReconstructor.reconstruct` : angles estimés sans capteur n'impliquent plus 360° mesurés ; score qualité pénalisé. La projection sans poses caméra reste une limite intrinsèque.
 - `MainActivity.extractCandidates` : API 27+ `MediaMetadataRetriever.getScaledFrameAtTime` avec repli, moins de pics de bitmap 4K ; API 26 utilise l'ancien chemin.
 - `validate-reconstruction.yml` : test + APK/AAB signés en debug et préversion indépendante si et seulement si CI réussie ; aucun merge main.
+
+## 8. v1.2.2-preview2 — cadrage et masques
+- `SilhouetteFraming.isVerticallyClipped` : marge top/bottom de 1/80 image, minimum 2 px, pour exclure les silhouettes coupées. Tests unitaires dans `SilhouetteFramingTest`.
+- `BodyReconstructor` : ByteArray binaire par masque après seuil 0,60 humain ou 0,50 objet ; les données Float32 sont temporaires. Retours `rejectedCroppedViews` dans `BodyReconstruction`, non persistés dans archives format 1 (lecture ancienne inchangée avec défaut à zéro).
+- `MainActivity` : comptage des vues écartées et avertissement de volume non calibré.

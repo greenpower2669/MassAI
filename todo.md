@@ -32,3 +32,11 @@
 - [ ] Mesurer CPU/RAM 25/40/60 vues par niveau × 1–5, caméra normale/ultra, compatibilité Samsung Android 16.
 - [ ] Étudier l'érosion des membres par consensus voxel et nettoyage A/B ; apporter preuve sur vrai scan.
 - [ ] Ne pas merger main, ni présenter volumes/densité comme validés scientifiquement.
+
+### Préversion 2 — 25/10/2026
+- [x] Rejet des vues dont le masque touche les marges verticales avant la mise à l'échelle par hauteur.
+- [x] Masques persistants convertis de Float32 à Byte ; messages explicites et vues rejetées affichées.
+- [x] Tests de cadrage, version 14 / v1.2.2-preview2 ; CI et Release à vérifier après push.
+- [ ] Tester vraies vidéos avec et sans ce filtre : attention aux masques légitimement très proches des bords.
+- [ ] Mesurer mémoire et vérifier l'égalité des votes binaires avant/après ; contrôler anciennes archives sans nouveau compteur sérialisé.
+- [ ] Calibration 6 DoF et véritables mesures 3D, régression jambes/pieds sur étalons : toujours ouverts.

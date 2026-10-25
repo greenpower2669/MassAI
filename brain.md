@@ -22,3 +22,8 @@ v1.2.0-beta1 = branche de validation, **pas** une release et pas une APK validé
 - Sélection angulaire multi-niveau : remplir chaque quota avec les vues disponibles si certains secteurs sont vides.
 - Android 8.1+ : demander des images vidéo déjà réduites au décodeur (Android 8.0 conserve l'ancien chemin).
 - Aucune exactitude anatomique ou volumétrique affirmée sans tests vidéo/objets étalons.
+
+## Correctif préversion v1.2.2-preview2 — sécurité du cadrage
+- Une silhouette détectée contre une marge verticale de l'image est ignorée avant mise à l'échelle (évite de confondre pied coupé et sol). Le nombre de vues rejetées est montré à l'écran.
+- Les probabilités Float32 sont converties en masques binaires Byte après seuil, ce qui divise par quatre la mémoire persistante de ces masques sans changer le vote actuel ; probabilités de segmentation non conservées ensuite.
+- Le volume calculé est annoncé comme indicatif et non calibré ; nécessité de calibrer et valider sur objets physiques.
