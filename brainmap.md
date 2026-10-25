@@ -31,3 +31,10 @@
 
 ## 6. Chaîne des causes
 Vue manquante/bas hors champ → en v1.1 support négatif « total vues » → voxels pieds/jambes éliminés → nettoyage/réparation peuvent amplifier → mesh tronqué. v1.2 compte uniquement les observations in-frame et exige un minimum. Autre chaîne distincte : yaw téléphone pris pour angle de trajectoire + perspective/distorsion non calibrées → projection fausse → volume et membre déformés malgré vote corrigé. **Ne pas confondre hypothèse et cause prouvée.**
+
+## 7. Lot v1.2.1-preview1 (25 octobre 2026)
+- `MeshTriangleSampling.kt` : choisit des paires consécutives de triangles selon budget, préserve les quads émis par `VoxelMeshBuilder`. `BodyModelView.drawMesh` l'utilise, OBJ indépendant. Test `MeshTriangleSamplingTest.kt`.
+- `FrameSelector.selectByMeasuredAngle` : répartit par niveau et par secteur, remplit les quotas vides par diversité angulaire locale, puis redistribue les places restantes. Test `FrameSelectorCoverageTest.kt`.
+- `BodyReconstructor.reconstruct` : angles estimés sans capteur n'impliquent plus 360° mesurés ; score qualité pénalisé. La projection sans poses caméra reste une limite intrinsèque.
+- `MainActivity.extractCandidates` : API 27+ `MediaMetadataRetriever.getScaledFrameAtTime` avec repli, moins de pics de bitmap 4K ; API 26 utilise l'ancien chemin.
+- `validate-reconstruction.yml` : test + APK/AAB signés en debug et préversion indépendante si et seulement si CI réussie ; aucun merge main.

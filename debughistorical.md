@@ -15,3 +15,10 @@
 - Segmentation qui coupe les pieds/bras ; perspective, yaw non orbital, silhouette recalée sur hauteur sans plan au sol, distorsion ultra grand-angle ; réparateur supprimant voxels fins ; bins angulaires vides ; surcharge mémoire si 60×5 vues. Examiner masques par angle et niveau avant d'affirmer une cause.
 - En présence de membres absents, ne **pas** imputer la correction au seul seuil ni prétendre que la forme anatomique est exacte.
 - Build, tests unitaires et essai physique non encore confirmés lors de la rédaction initiale ; reporter les résultats avérés dans todo.md au prochain cycle.
+
+## 25 octobre 2026 — remédiation initiale après audit
+- **Prouvé (lecture du code)** : stride sur les triangles individuels dans `BodyModelView` pouvait laisser une moitié de chaque quad lors de décimation. Correctif : sélectionner les deux triangles ensemble. Les données OBJ ne sont pas modifiées.
+- **Prouvé** : `BodyReconstructor` annonçait une couverture 360° fictive pour les angles issus du temps des vidéos sans métadonnées. Correctif : 0° mesuré, score technique prudent ; la pose caméra demeure non calibrée.
+- **Prouvé** : secteurs sans candidats dans `FrameSelector` ne récupéraient pas les images d'autres secteurs ; correctif par complément des quotas.
+- **Optimisation conditionnelle** : demande de frames réduites directement à MediaMetadataRetriever sur Android 8.1+ ; bénéfice mémoire/performance à mesurer sur téléphone.
+- **À confirmer sur captures réelles** : jambes/pieds manquants, erreurs des masques, recentrage, consensus voxel, distorsion, géométrie 6 DoF ; ne pas annoncer de réparation anatomique avant reproduction.

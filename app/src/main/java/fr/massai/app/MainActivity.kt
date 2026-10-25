@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.content.Context
 import android.content.Intent
 import android.media.MediaMetadataRetriever
+import android.os.Build
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
@@ -417,9 +418,9 @@ class MainActivity : AppCompatActivity() {
                 "Angles téléphone : ${metadata.coverageDegrees.roundToInt()}° mesurés$levelInfo$cameraInfo"
             }
             sourceLabel.startsWith("Vidéo importée") ->
-                "Angles : estimation uniforme (vidéo importée)"
+                "Angles supposés (vidéo importée) : couverture non mesurée"
             else ->
-                "Angles : mode de secours"
+                "Angles supposés : couverture non mesurée"
         }
 
         statusText.text = "$sourceLabel ✓\n$angleInfo"
@@ -612,7 +613,7 @@ class MainActivity : AppCompatActivity() {
                 val liters = BodyMath.liters(result.repairedVolumeM3)
                 val rawLiters = BodyMath.liters(result.rawVolumeM3)
                 val repairPct = result.repairFraction * 100.0
-                val angleLabel = if (result.anglesMeasured) "mesurée" else "estimée"
+                val angleLabel = if (result.anglesMeasured) "mesurée" else "non mesurée (angles supposés)"
 
                 val densityLine = if (weightKg != null) {
                     val kgPerLiter = BodyMath.densityKgPerLiter(
@@ -760,13 +761,33 @@ class MainActivity : AppCompatActivity() {
 
             if (durationMs <= 0L) return emptyList()
 
+            val sourceW = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
+            )?.toIntOrNull() ?: 0
+            val sourceH = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
+            )?.toIntOrNull() ?: 0
+
             for (i in 0 until wanted) {
                 val fraction = (i + 0.5).toDouble() / wanted.toDouble()
                 val timeMs = (durationMs * fraction).toLong()
-                val bitmap = retriever.getFrameAtTime(
-                    timeMs * 1000L,
-                    MediaMetadataRetriever.OPTION_CLOSEST
-                ) ?: continue
+                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 &&
+                    sourceW > 0 && sourceH > 0
+                ) {
+                    val scale = minOf(1.0, 960.0 / maxOf(sourceW, sourceH))
+                    retriever.getScaledFrameAtTime(
+                        timeMs * 1000L,
+                        MediaMetadataRetriever.OPTION_CLOSEST,
+                        (sourceW * scale).roundToInt().coerceAtLeast(1),
+                        (sourceH * scale).roundToInt().coerceAtLeast(1)
+                    ) ?: retriever.getFrameAtTime(
+                        timeMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST
+                    )
+                } else {
+                    retriever.getFrameAtTime(
+                        timeMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST
+                    )
+                } ?: continue
 
                 try {
                     // Source may be 4K, but the segmentation runs at <= 640px.

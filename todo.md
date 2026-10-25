@@ -16,3 +16,19 @@
 ## Publication
 - [ ] Pas de release tant que build et tests téléphone ne sont pas vérifiés ; ensuite APK/AAB versionnés dans GitHub Releases et liens directs, sans ZIP substitut.
 - Branche d'origine v1.1 et `main` conservées ; suivi historique dans `TODO.md`.
+
+## MASSAI-FIX-20261025 — nouvelle branche expérimentale
+### Changements de code faits (validation CI à vérifier)
+- [x] Rendu des faces voxel par paires de triangles, test dédié.
+- [x] Complément des quotas de vues par niveau si secteurs vides, test dédié.
+- [x] Mesures angulaires non inventées dans le score et l'affichage pour les vidéos importées.
+- [x] Décodage vidéo directement réduit sur Android 8.1+ ; repli préservé.
+- [x] Version 1.2.1-preview1 ; workflow de test et préversion APK/AAB nommés.
+### Non encore fait : prochains tests et correction de fond
+- [ ] CI GitHub verte, APK/AAB intègres, liens directs et signature vérifiés ; ne pas déclarer de release prématurément.
+- [ ] Comparer la même vidéo sous 1.1, 1.2 et préversion (y compris silhouette 2D, rendu et export OBJ).
+- [ ] Instrumentation par masque/angle/étage, normalisation sol et hauteur ; discriminer erreurs de segmentation et erreurs de projection.
+- [ ] Géométrie caméra 6 DoF, intrinsics, distorsion et calibration métrique avec objets étalons.
+- [ ] Mesurer CPU/RAM 25/40/60 vues par niveau × 1–5, caméra normale/ultra, compatibilité Samsung Android 16.
+- [ ] Étudier l'érosion des membres par consensus voxel et nettoyage A/B ; apporter preuve sur vrai scan.
+- [ ] Ne pas merger main, ni présenter volumes/densité comme validés scientifiquement.

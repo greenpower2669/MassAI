@@ -139,7 +139,8 @@ class BodyReconstructor : Closeable {
                 silhouettes.map { it.angleRad }
             )
         } else {
-            360.0
+            // Angles inferred uniformly from time are not measured coverage.
+            0.0
         }
 
         if (anglesMeasured && angularCoverageDeg < 300.0) {
